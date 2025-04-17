@@ -1,6 +1,6 @@
 #!/bin/bash
 # Hestia-Odoo Interactive Installer
-# Version: 1.0
+# Version: 2.0
 # Author: Jaksws Team
 
 # ألوان ANSI
@@ -10,16 +10,13 @@ YELLOW='\033[0;93m'
 BLUE='\033[0;94m'
 NC='\033[0m' # إعادة الضبط
 
-# التأكد من وجود الدليل المطلوب لتسجيل العمليات
+# إعدادات السجل
 LOG_DIR="/var/log/hestia_installer"
 LOG_FILE="$LOG_DIR/install.log"
-if [ ! -d "$LOG_DIR" ]; then
-    echo -e "${YELLOW}إنشاء دليل السجلات: $LOG_DIR${NC}"
-    sudo mkdir -p "$LOG_DIR"
-    sudo chmod -R 755 "$LOG_DIR"
-fi
+mkdir -p "$LOG_DIR"
+chmod 755 "$LOG_DIR"
 
-# طلب إدخال البيانات الأساسية
+# واجهة المستخدم
 clear
 echo -e "${GREEN}"
 cat << "EOF"
@@ -30,9 +27,9 @@ cat << "EOF"
 EOF
 echo -e "${NC}"
 
-# طلب إدخال البيانات الأساسية
+# طلب المدخلات
 read -p "أدخل اسم النطاق الرئيسي (مثال: jaksws.com): " DOMAIN
-read -p "أدعنوان IP الخاص بالسيرفر: " SERVER_IP
+read -p "أدخل عنوان IP الخاص بالسيرفر: " SERVER_IP
 read -p "أدخل منفذ هيستيا (الافتراضي 2083): " HESTIA_PORT
 HESTIA_PORT=${HESTIA_PORT:-2083}
 
@@ -40,11 +37,24 @@ read -p "أدخل إصدار Odoo المطلوب (مثال: 18.0): " ODOO_VERSIO
 read -p "أدخل منفذ Odoo (الافتراضي 8069): " ODOO_PORT
 ODOO_PORT=${ODOO_PORT:-8069}
 
-# طلب بيانات Cloudflare
+# إعدادات Cloudflare
 echo -e "${YELLOW}\nإعدادات Cloudflare (اتركها فارغة لتخطي الإعداد):${NC}"
-read -p "API Key: " CF_API
-read -p "Email: " CF_EMAIL
-read -p "Zone ID: " CF_ZONE
+read -p "اختر طريقة المصادقة (1 للـ API Token، 2 للـ API Key): " CF_AUTH_METHOD
+
+case $CF_AUTH_METHOD in
+    1)
+        read -p "API Token: " CF_TOKEN
+        ;;
+    2)
+        read -p "API Key: " CF_API_KEY
+        read -p "Email: " CF_EMAIL
+        ;;
+    *)
+        echo -e "${YELLOW}سيتم تخطي إعداد Cloudflare.${NC}"
+        ;;
+esac
+
+[[ -n $CF_AUTH_METHOD ]] && read -p "Zone ID: " CF_ZONE
 
 # تأكيد الإعدادات
 echo -e "${GREEN}\n=== تأكيد الإعدادات ==="
@@ -53,15 +63,51 @@ echo -e "IP السيرفر: ${SERVER_IP}"
 echo -e "منفذ هيستيا: ${HESTIA_PORT}"
 echo -e "إصدار Odoo: ${ODOO_VERSION}"
 echo -e "منفذ Odoo: ${ODOO_PORT}"
-echo -e "Cloudflare API: ${CF_API:+تم الإدخال}${NC}"
+[[ -n $CF_AUTH_METHOD ]] && echo -e "طريقة مصادقة Cloudflare: $([ "$CF_AUTH_METHOD" == "1" ] && echo "Token" || echo "API Key")"
+echo -e "${NC}"
 
 read -p "هل تريد المتابعة؟ (y/n): " CONFIRM
 [[ $CONFIRM != [yY] ]] && exit
 
-# وظيفة تثبيت هيستيا
+# التحقق من الصحة
+validate_inputs() {
+    local valid=true
+
+    # التحقق من النطاق
+    [[ ! "$DOMAIN" =~ ^[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$ ]] && {
+        echo -e "${RED}خطأ: اسم النطاق غير صالح${NC}" | tee -a "$LOG_FILE"
+        valid=false
+    }
+
+    # التحقق من IP
+    [[ ! "$SERVER_IP" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]] && {
+        echo -e "${RED}خطأ: عنوان IP غير صالح${NC}" | tee -a "$LOG_FILE"
+        valid=false
+    }
+
+    # التحقق من Cloudflare
+    if [[ -n $CF_AUTH_METHOD ]]; then
+        if [[ $CF_AUTH_METHOD == "1" && (${#CF_TOKEN} -ne 40 || -z "$CF_TOKEN") ]]; then
+            echo -e "${RED}خطأ: التوكن يجب أن يكون 40 حرفًا${NC}" | tee -a "$LOG_FILE"
+            valid=false
+        elif [[ $CF_AUTH_METHOD == "2" && (${#CF_API_KEY} -ne 37 || -z "$CF_EMAIL") ]]; then
+            echo -e "${RED}خطأ: بيانات Cloudflare غير صالحة${NC}" | tee -a "$LOG_FILE"
+            valid=false
+        fi
+        
+        [[ ! "$CF_ZONE" =~ ^[a-zA-Z0-9]{32}$ ]] && {
+            echo -e "${RED}خطأ: Zone ID غير صالح${NC}" | tee -a "$LOG_FILE"
+            valid=false
+        }
+    fi
+
+    $valid || exit 1
+}
+
+# تثبيت HestiaCP
 install_hestia() {
     echo -e "${BLUE}\nجاري تثبيت HestiaCP...${NC}" | tee -a "$LOG_FILE"
-    wget https://raw.githubusercontent.com/hestiacp/hestiacp/release/install/hst-install.sh
+    wget -q https://raw.githubusercontent.com/hestiacp/hestiacp/release/install/hst-install.sh
     bash hst-install.sh \
         --interactive no \
         --hostname panel.${DOMAIN} \
@@ -80,11 +126,11 @@ install_hestia() {
         --fail2ban yes
 }
 
-# وظيفة تثبيت Odoo
+# تثبيت Odoo
 install_odoo() {
     echo -e "${BLUE}\nجاري تثبيت Odoo...${NC}" | tee -a "$LOG_FILE"
     useradd -m -d /opt/odoo -U -r -s /bin/bash odoo
-    sudo -u odoo git clone https://github.com/odoo/odoo --branch ${ODOO_VERSION} --depth 1 /opt/odoo/src
+    sudo -u odoo git clone -b ${ODOO_VERSION} --depth 1 https://github.com/odoo/odoo /opt/odoo/src
     
     sudo -u odoo python3 -m venv /opt/odoo/venv
     sudo -u odoo /opt/odoo/venv/bin/pip install -r /opt/odoo/src/requirements.txt
@@ -110,112 +156,90 @@ EOF
     systemctl enable --now odoo
 }
 
-# وظيفة إعداد Cloudflare
-setup_cloudflare() {
-    if [[ -n $CF_API ]]; then
-        echo -e "${BLUE}\nجاري إعداد Cloudflare DNS...${NC}" | tee -a "$LOG_FILE"
-        curl -X POST "https://api.cloudflare.com/client/v4/zones/${CF_ZONE}/dns_records" \
-            -H "X-Auth-Email: ${CF_EMAIL}" \
-            -H "X-Auth-Key: ${CF_API}" \
-            -H "Content-Type: application/json" \
-            --data '{"type":"A","name":"'${DOMAIN}'","content":"'${SERVER_IP}'","ttl":120,"proxied":false}' \
-            | tee -a "$LOG_FILE"
-    fi
-}
-
-# وظيفة إضافة Odoo إلى قائمة التطبيقات السريعة في هيستيا
-add_odoo_to_hestia_quick_app() {
-    echo -e "${BLUE}\nإضافة Odoo إلى قائمة التطبيقات السريعة في هيستيا...${NC}" | tee -a "$LOG_FILE"
-    APP_DIR="/usr/local/hestia/data/templates/web"
-    if [ ! -d "$APP_DIR" ]; then
-        echo -e "${RED}دليل التطبيقات السريعة غير موجود: $APP_DIR${NC}" | tee -a "$LOG_FILE"
-        return 1
-    fi
-
-    cat > "$APP_DIR/odoo.tpl" <<EOF
-# Odoo Quick App Template
-server {
-    listen      80;
-    server_name ${DOMAIN};
-    root        /opt/odoo/src;
-    index       index.html;
-
-    location / {
-        proxy_pass http://127.0.0.1:${ODOO_PORT};
-        proxy_set_header Host \$host;
-        proxy_set_header X-Real-IP \$remote_addr;
-        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto \$scheme;
-    }
-}
-EOF
-
-    echo -e "${GREEN}تمت إضافة Odoo إلى قائمة التطبيقات السريعة بنجاح.${NC}" | tee -a "$LOG_FILE"
-}
-
-# التحقق من صحة الإدخالات
-validate_inputs() {
-    local valid=true
-
-    if [[ -z "$DOMAIN" || ! "$DOMAIN" =~ ^[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$ ]]; then
-        echo -e "${RED}اسم النطاق غير صالح.${NC}" | tee -a "$LOG_FILE"
-        valid=false
-    fi
-
-    if [[ -z "$SERVER_IP" || ! "$SERVER_IP" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]]; then
-        echo -e "${RED}عنوان IP غير صالح.${NC}" | tee -a "$LOG_FILE"
-        valid=false
-    fi
-
-    if [[ -z "$HESTIA_PORT" || ! "$HESTIA_PORT" =~ ^[0-9]{1,5}$ || "$HESTIA_PORT" -lt 1 || "$HESTIA_PORT" -gt 65535 ]]; then
-        echo -e "${RED}منفذ هيستيا غير صالح.${NC}" | tee -a "$LOG_FILE"
-        valid=false
-    fi
-
-    if [[ -z "$ODOO_VERSION" || ! "$ODOO_VERSION" =~ ^[0-9]+\.[0-9]+$ ]]; then
-        echo -e "${RED}إصدار Odoo غير صالح.${NC}" | tee -a "$LOG_FILE"
-        valid=false
-    fi
-
-    if [[ -z "$ODOO_PORT" || ! "$ODOO_PORT" =~ ^[0-9]{1,5}$ || "$ODOO_PORT" -lt 1 || "$ODOO_PORT" -gt 65535 ]]; then
-        echo -e "${RED}منفذ Odoo غير صالح.${NC}" | tee -a "$LOG_FILE"
-        valid=false
-    fi
-
-    if [[ -n "$CF_API" && ! "$CF_API" =~ ^[a-zA-Z0-9]{32}$ ]]; then
-        echo -e "${RED}مفتاح API الخاص بـ Cloudflare غير صالح.${NC}" | tee -a "$LOG_FILE"
-        valid=false
-    fi
-
-    if [[ -n "$CF_EMAIL" && ! "$CF_EMAIL" =~ ^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$ ]]; then
-        echo -e "${RED}البريد الإلكتروني الخاص بـ Cloudflare غير صالح.${NC}" | tee -a "$LOG_FILE"
-        valid=false
-    fi
-
-    if [[ -n "$CF_ZONE" && ! "$CF_ZONE" =~ ^[a-zA-Z0-9]{32}$ ]]; then
-        echo -e "${RED}معرف المنطقة الخاص بـ Cloudflare غير صالح.${NC}" | tee -a "$LOG_FILE"
-        valid=false
-    fi
-
-    if [[ "$valid" = false ]]; then
-        echo -e "${RED}يرجى تصحيح الإدخالات غير الصالحة والمحاولة مرة أخرى.${NC}" | tee -a "$LOG_FILE"
-        exit 1
-    fi
-}
-
-# التحقق من صحة الإدخالات
-validate_inputs
-
-# تثبيت هيستيا
-install_hestia
-
-# تثبيت Odoo
-install_odoo
-
 # إعداد Cloudflare
+setup_cloudflare() {
+    [[ -z $CF_AUTH_METHOD ]] && return
+
+    echo -e "${BLUE}\nجاري إعداد Cloudflare DNS...${NC}" | tee -a "$LOG_FILE"
+    
+    # تحديد رؤوس المصادقة
+    if [[ $CF_AUTH_METHOD == "1" ]]; then
+        AUTH_HEADER="Authorization: Bearer $CF_TOKEN"
+    else
+        AUTH_HEADER="X-Auth-Email: $CF_EMAIL\nX-Auth-Key: $CF_API_KEY"
+    fi
+
+    # السجلات المطلوبة
+    declare -A records=(
+        ["panel"]="A"
+        ["odoo${ODOO_VERSION}"]="A"
+        ["@"]="MX"
+        ["@"]="TXT"
+    )
+
+    for record in "${!records[@]}"; do
+        type=${records[$record]}
+        case $type in
+            "A")
+                content=$SERVER_IP
+                proxied=$([[ "$record" == "panel" ]] && echo "true" || echo "false")
+                data=$(jq -n \
+                    --arg type "$type" \
+                    --arg name "$record" \
+                    --arg content "$content" \
+                    --argjson ttl 3600 \
+                    --argjson proxied $proxied \
+                    '{"type":$type,"name":$name,"content":$content,"ttl":$ttl,"proxied":$proxied}')
+                ;;
+            "MX")
+                content="mail.$DOMAIN"
+                data=$(jq -n \
+                    --arg type "$type" \
+                    --arg name "@" \
+                    --arg content "$content" \
+                    --argjson priority 10 \
+                    --argjson ttl 3600 \
+                    '{"type":$type,"name":$name,"content":$content,"priority":$priority,"ttl":$ttl}')
+                ;;
+            "TXT")
+                content="v=spf1 a mx ~all"
+                data=$(jq -n \
+                    --arg type "$type" \
+                    --arg name "@" \
+                    --arg content "$content" \
+                    --argjson ttl 3600 \
+                    '{"type":$type,"name":$name,"content":$content,"ttl":$ttl}')
+                ;;
+        esac
+
+        echo -e "${BLUE}إضافة سجل $type لـ $record...${NC}" | tee -a "$LOG_FILE"
+        response=$(curl -s -X POST "https://api.cloudflare.com/client/v4/zones/${CF_ZONE}/dns_records" \
+            -H "$AUTH_HEADER" \
+            -H "Content-Type: application/json" \
+            --data "$data")
+
+        if echo "$response" | grep -q '"success": true'; then
+            echo -e "${GREEN}تمت الإضافة بنجاح!${NC}" | tee -a "$LOG_FILE"
+        else
+            echo -e "${RED}فشل الإضافة: $response${NC}" | tee -a "$LOG_FILE"
+            exit 1
+        fi
+    done
+}
+
+# الإعداد النهائي
+final_setup() {
+    echo -e "${GREEN}\n=== الإعداد النهائي ==="
+    echo -e "لوحة التحكم: https://panel.${DOMAIN}:${HESTIA_PORT}"
+    echo -e "منفذ Odoo: ${ODOO_PORT}"
+    echo -e "تم التثبيت بنجاح!${NC}"
+}
+
+# التنفيذ الرئيسي
+validate_inputs
+install_hestia
+install_odoo
 setup_cloudflare
+final_setup
 
-# إضافة Odoo إلى قائمة التطبيقات السريعة في هيستيا
-add_odoo_to_hestia_quick_app
-
-echo -e "${GREEN}\nتم التثبيت بنجاح!${NC}" | tee -a "$LOG_FILE"
+echo -e "${YELLOW}\nملاحظة: تم توليد كلمة مرور عشوائية لهيستيا، تحقق من البريد الإلكتروني${NC}"
