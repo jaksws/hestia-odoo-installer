@@ -10,6 +10,15 @@ YELLOW='\033[0;93m'
 BLUE='\033[0;94m'
 NC='\033[0m' # إعادة الضبط
 
+# التأكد من وجود الدليل المطلوب لتسجيل العمليات
+LOG_DIR="/var/log/hestia_installer"
+LOG_FILE="$LOG_DIR/install.log"
+if [ ! -d "$LOG_DIR" ]; then
+    echo -e "${YELLOW}إنشاء دليل السجلات: $LOG_DIR${NC}"
+    sudo mkdir -p "$LOG_DIR"
+    sudo chmod -R 755 "$LOG_DIR"
+fi
+
 # طلب إدخال البيانات الأساسية
 clear
 echo -e "${GREEN}"
@@ -51,7 +60,7 @@ read -p "هل تريد المتابعة؟ (y/n): " CONFIRM
 
 # وظيفة تثبيت هيستيا
 install_hestia() {
-    echo -e "${BLUE}\nجاري تثبيت HestiaCP...${NC}"
+    echo -e "${BLUE}\nجاري تثبيت HestiaCP...${NC}" | tee -a "$LOG_FILE"
     wget https://raw.githubusercontent.com/hestiacp/hestiacp/release/install/hst-install.sh
     bash hst-install.sh \
         --interactive no \
@@ -73,7 +82,7 @@ install_hestia() {
 
 # وظيفة تثبيت Odoo
 install_odoo() {
-    echo -e "${BLUE}\nجاري تثبيت Odoo...${NC}"
+    echo -e "${BLUE}\nجاري تثبيت Odoo...${NC}" | tee -a "$LOG_FILE"
     useradd -m -d /opt/odoo -U -r -s /bin/bash odoo
     sudo -u odoo git clone https://github.com/odoo/odoo --branch ${ODOO_VERSION} --depth 1 /opt/odoo/src
     
@@ -104,27 +113,8 @@ EOF
 # وظيفة إعداد Cloudflare
 setup_cloudflare() {
     if [[ -n $CF_API ]]; then
-        echo -e "${BLUE}\nجاري إعداد Cloudflare DNS...${NC}"
+        echo -e "${BLUE}\nجاري إعداد Cloudflare DNS...${NC}" | tee -a "$LOG_FILE"
         curl -X POST "https://api.cloudflare.com/client/v4/zones/${CF_ZONE}/dns_records" \
             -H "X-Auth-Email: ${CF_EMAIL}" \
-            -H "X-Auth-Key: ${CF_API}" \
-            -H "Content-Type: application/json" \
-            --data '{"type":"A","name":"panel","content":"'${SERVER_IP}'","ttl":3600,"proxied":true}'
-    fi
-}
-
-# وظيفة الإعداد النهائي
-final_setup() {
-    echo -e "${GREEN}\n=== الإعداد النهائي ==="
-    echo -e "لوحة التحكم: https://panel.${DOMAIN}:${HESTIA_PORT}"
-    echo -e "منفذ Odoo: ${ODOO_PORT}"
-    echo -e "تم التثبيت بنجاح!${NC}"
-}
-
-# التنفيذ الرئيسي
-install_hestia
-install_odoo
-setup_cloudflare
-final_setup
-
-echo -e "${YELLOW}\nملاحظة: تم توليد كلمة مرور عشوائية لهيستيا، تحقق من البريد الإلكتروني${NC}"
+            -H "X-Auth-Key
+
