@@ -227,6 +227,42 @@ setup_cloudflare() {
     done
 }
 
+# إضافة Odoo إلى قائمة التطبيقات السريعة في هيستيا
+add_odoo_to_hestia_quick_app() {
+    echo -e "${BLUE}\nإضافة Odoo إلى قائمة التطبيقات السريعة في هيستيا...${NC}" | tee -a "$LOG_FILE"
+    cat > /usr/local/hestia/data/templates/web/odoo.tpl <<EOF
+server {
+    listen      80;
+    server_name odoo.${DOMAIN};
+    location / {
+        proxy_pass http://127.0.0.1:${ODOO_PORT};
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+    }
+}
+EOF
+
+    cat > /usr/local/hestia/data/templates/web/odoo.stpl <<EOF
+server {
+    listen      443 ssl;
+    server_name odoo.${DOMAIN};
+    ssl_certificate      /etc/ssl/certs/ssl-cert-snakeoil.pem;
+    ssl_certificate_key  /etc/ssl/private/ssl-cert-snakeoil.key;
+    location / {
+        proxy_pass http://127.0.0.1:${ODOO_PORT};
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+    }
+}
+EOF
+
+    echo -e "${GREEN}تمت الإضافة بنجاح!${NC}" | tee -a "$LOG_FILE"
+}
+
 # الإعداد النهائي
 final_setup() {
     echo -e "${GREEN}\n=== الإعداد النهائي ==="
@@ -239,6 +275,7 @@ final_setup() {
 validate_inputs
 install_hestia
 install_odoo
+add_odoo_to_hestia_quick_app
 setup_cloudflare
 final_setup
 
