@@ -179,3 +179,63 @@ sudo ./installer.sh --install
 ```bash
 tail -n 50 install.log
 ```
+
+### 10. خطوات التثبيت على بيئة أوبنتو:
+```bash
+# تحديث النظام الأساسي
+sudo apt update && sudo apt full-upgrade -y
+
+# تثبيت التبعيات الأساسية
+sudo apt install -y curl wget git unzip dialog ca-certificates
+
+# تنزيل السكربت وتجهيزه
+wget https://raw.githubusercontent.com/jaksws/hestia-odoo-installer/main/installer.sh
+chmod +x installer.sh
+dos2unix installer.sh
+
+# تشغيل التثبيت مع المراقبة
+sudo ./installer.sh --install 2>&1 | tee install.log
+
+# التحقق من المكونات الأساسية بعد التثبيت
+curl -k https://localhost:2083
+curl -I http://localhost:8069
+tail -f install.log
+
+# إعدادات ما بعد التثبيت
+sudo passwd root
+sudo ufw allow 2083/tcp
+sudo ufw allow 8069/tcp
+sudo ufw enable
+
+# إعداد HTTPS
+sudo apt install -y certbot
+sudo certbot certonly --standalone -d example.com
+sudo nano /etc/nginx/sites-available/odoo
+# أضف التكوين التالي:
+server {
+    listen 80;
+    server_name example.com;
+    return 301 https://$host$request_uri;
+}
+server {
+    listen 443 ssl;
+    server_name example.com;
+    ssl_certificate /etc/letsencrypt/live/example.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/example.com/privkey.pem;
+    location / {
+        proxy_pass http://127.0.0.1:8069;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+sudo ln -s /etc/nginx/sites-available/odoo /etc/nginx/sites-enabled/
+sudo systemctl restart nginx
+
+# تكامل GitHub Copilot
+sudo snap install --classic code
+code --install-extension GitHub.copilot
+# تسجيل الدخول إلى حساب GitHub الخاص بك
+# اتبع التعليمات التي تظهر على الشاشة
+```
