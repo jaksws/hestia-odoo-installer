@@ -42,6 +42,112 @@ sudo ufw allow 8069/tcp
 sudo ufw enable
 ```
 
+### 6. إضافة Odoo إلى قائمة التطبيقات السريعة في هيستيا:
+```bash
+# تم تضمين هذه الخطوة في السكربت، لا حاجة لإجراء إضافي
+```
+
+### 7. إعداد HTTPS:
+```bash
+# تثبيت Certbot
+sudo apt install -y certbot
+
+# الحصول على شهادة SSL
+sudo certbot certonly --standalone -d example.com
+
+# إعداد Nginx كوكيل عكسي مع SSL
+sudo nano /etc/nginx/sites-available/odoo
+# أضف التكوين التالي:
+server {
+    listen 80;
+    server_name example.com;
+    return 301 https://$host$request_uri;
+}
+
+server {
+    listen 443 ssl;
+    server_name example.com;
+
+    ssl_certificate /etc/letsencrypt/live/example.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/example.com/privkey.pem;
+
+    location / {
+        proxy_pass http://127.0.0.1:8069;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+
+# تفعيل التكوين
+sudo ln -s /etc/nginx/sites-available/odoo /etc/nginx/sites-enabled/
+sudo systemctl restart nginx
+```
+
+### 8. تكامل GitHub Copilot:
+```bash
+# تثبيت Visual Studio Code
+sudo snap install --classic code
+
+# تثبيت ملحق GitHub Copilot
+code --install-extension GitHub.copilot
+
+# تسجيل الدخول إلى حساب GitHub الخاص بك
+# اتبع التعليمات التي تظهر على الشاشة
+```
+
+### 9. التحقق من صحة الإدخالات:
+```bash
+# التحقق من صحة اسم النطاق
+if [[ -z "$DOMAIN" || ! "$DOMAIN" =~ ^[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$ ]]; then
+    echo "اسم النطاق غير صالح."
+    exit 1
+fi
+
+# التحقق من صحة عنوان IP
+if [[ -z "$SERVER_IP" || ! "$SERVER_IP" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]]; then
+    echo "عنوان IP غير صالح."
+    exit 1
+fi
+
+# التحقق من صحة منفذ هيستيا
+if [[ -z "$HESTIA_PORT" || ! "$HESTIA_PORT" =~ ^[0-9]{1,5}$ || "$HESTIA_PORT" -lt 1 || "$HESTIA_PORT" -gt 65535 ]]; then
+    echo "منفذ هيستيا غير صالح."
+    exit 1
+fi
+
+# التحقق من صحة إصدار Odoo
+if [[ -z "$ODOO_VERSION" || ! "$ODOO_VERSION" =~ ^[0-9]+\.[0-9]+$ ]]; then
+    echo "إصدار Odoo غير صالح."
+    exit 1
+fi
+
+# التحقق من صحة منفذ Odoo
+if [[ -z "$ODOO_PORT" || ! "$ODOO_PORT" =~ ^[0-9]{1,5}$ || "$ODOO_PORT" -lt 1 || "$ODOO_PORT" -gt 65535 ]]; then
+    echo "منفذ Odoo غير صالح."
+    exit 1
+fi
+
+# التحقق من صحة مفتاح API الخاص بـ Cloudflare
+if [[ -n "$CF_API" && ! "$CF_API" =~ ^[a-zA-Z0-9]{32}$ ]]; then
+    echo "مفتاح API الخاص بـ Cloudflare غير صالح."
+    exit 1
+fi
+
+# التحقق من صحة البريد الإلكتروني الخاص بـ Cloudflare
+if [[ -n "$CF_EMAIL" && ! "$CF_EMAIL" =~ ^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$ ]]; then
+    echo "البريد الإلكتروني الخاص بـ Cloudflare غير صالح."
+    exit 1
+fi
+
+# التحقق من صحة معرف المنطقة الخاص بـ Cloudflare
+if [[ -n "$CF_ZONE" && ! "$CF_ZONE" =~ ^[a-zA-Z0-9]{32}$ ]]; then
+    echo "معرف المنطقة الخاص بـ Cloudflare غير صالح."
+    exit 1
+fi
+```
+
 ### إذا واجهتك أي مشاكل، جرب هذه الحلول:
 
 #### أ. مشكلة في تبعيات Python:
