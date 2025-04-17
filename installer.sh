@@ -271,7 +271,47 @@ final_setup() {
     echo -e "تم التثبيت بنجاح!${NC}"
 }
 
+# اكتشاف البيئة وتطبيق أفضل الإعدادات
+detect_environment() {
+    echo -e "${BLUE}\nاكتشاف البيئة وتطبيق أفضل الإعدادات...${NC}" | tee -a "$LOG_FILE"
+    # اكتشاف نظام التشغيل
+    OS=$(uname -s)
+    case $OS in
+        Linux)
+            DISTRO=$(lsb_release -is)
+            VERSION=$(lsb_release -rs)
+            echo -e "${GREEN}نظام التشغيل: $DISTRO $VERSION${NC}" | tee -a "$LOG_FILE"
+            ;;
+        Darwin)
+            echo -e "${GREEN}نظام التشغيل: macOS${NC}" | tee -a "$LOG_FILE"
+            ;;
+        *)
+            echo -e "${RED}نظام التشغيل غير مدعوم${NC}" | tee -a "$LOG_FILE"
+            exit 1
+            ;;
+    esac
+
+    # تطبيق الإعدادات المخصصة بناءً على البيئة
+    if [[ $DISTRO == "Ubuntu" ]]; then
+        echo -e "${BLUE}تطبيق إعدادات مخصصة لـ Ubuntu...${NC}" | tee -a "$LOG_FILE"
+        sudo apt update
+        sudo apt install -y curl wget git unzip dialog ca-certificates jq
+    elif [[ $DISTRO == "Debian" ]]; then
+        echo -e "${BLUE}تطبيق إعدادات مخصصة لـ Debian...${NC}" | tee -a "$LOG_FILE"
+        sudo apt update
+        sudo apt install -y curl wget git unzip dialog ca-certificates jq
+    elif [[ $DISTRO == "CentOS" ]]; then
+        echo -e "${BLUE}تطبيق إعدادات مخصصة لـ CentOS...${NC}" | tee -a "$LOG_FILE"
+        sudo yum update -y
+        sudo yum install -y curl wget git unzip dialog ca-certificates jq
+    else
+        echo -e "${RED}التوزيعة غير مدعومة${NC}" | tee -a "$LOG_FILE"
+        exit 1
+    fi
+}
+
 # التنفيذ الرئيسي
+detect_environment
 validate_inputs
 install_hestia
 install_odoo

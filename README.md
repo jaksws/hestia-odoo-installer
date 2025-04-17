@@ -329,3 +329,41 @@ server {
 sudo ln -s /etc/nginx/sites-available/odoo /etc/nginx/sites-enabled/
 sudo systemctl restart nginx
 ```
+
+### 16. اكتشاف البيئة وتطبيق أفضل الإعدادات:
+```bash
+# اكتشاف نظام التشغيل
+OS=$(uname -s)
+case $OS in
+    Linux)
+        DISTRO=$(lsb_release -is)
+        VERSION=$(lsb_release -rs)
+        echo "نظام التشغيل: $DISTRO $VERSION"
+        ;;
+    Darwin)
+        echo "نظام التشغيل: macOS"
+        ;;
+    *)
+        echo "نظام التشغيل غير مدعوم"
+        exit 1
+        ;;
+esac
+
+# تطبيق الإعدادات المخصصة بناءً على البيئة
+if [[ $DISTRO == "Ubuntu" ]]; then
+    echo "تطبيق إعدادات مخصصة لـ Ubuntu..."
+    sudo apt update
+    sudo apt install -y curl wget git unzip dialog ca-certificates jq
+elif [[ $DISTRO == "Debian" ]]; then
+    echo "تطبيق إعدادات مخصصة لـ Debian..."
+    sudo apt update
+    sudo apt install -y curl wget git unzip dialog ca-certificates jq
+elif [[ $DISTRO == "CentOS" ]]; then
+    echo "تطبيق إعدادات مخصصة لـ CentOS..."
+    sudo yum update -y
+    sudo yum install -y curl wget git unzip dialog ca-certificates jq
+else
+    echo "التوزيعة غير مدعومة"
+    exit 1
+fi
+```
