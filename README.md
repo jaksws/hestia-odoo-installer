@@ -239,3 +239,93 @@ code --install-extension GitHub.copilot
 # تسجيل الدخول إلى حساب GitHub الخاص بك
 # اتبع التعليمات التي تظهر على الشاشة
 ```
+
+### 11. تثبيت إصدارات PHP 8.2, 8.3, و 8.4:
+```bash
+# إضافة مستودع Ondrej Sury
+sudo add-apt-repository ppa:ondrej/php
+sudo apt update
+
+# تثبيت إصدارات PHP
+sudo apt install -y php8.2 php8.3 php8.4
+
+# التحقق من التثبيت
+php8.2 -v
+php8.3 -v
+php8.4 -v
+```
+
+### 12. استخدام `screen` أو `nohup` لضمان استمرار عملية التثبيت حتى إذا تم إغلاق التيرمينال:
+```bash
+# استخدام `screen`
+sudo apt install screen -y
+screen -S hestia_install
+sudo ./installer.sh
+# اضغط `Ctrl+A` ثم `D` للانفصال عن الجلسة.
+# أعِد الاتصال لاحقًا بـ:
+screen -r hestia_install
+
+# استخدام `nohup`
+nohup sudo ./installer.sh > install.log 2>&1 &
+# تابع التقدم بـ:
+tail -f install.log
+```
+
+### 13. إعداد خدمة البريد الإلكتروني في هيستيا:
+```bash
+# تثبيت HestiaCP يتضمن خدمات البريد الإلكتروني مثل Exim و Dovecot
+# لا حاجة لإجراء إضافي
+```
+
+### 14. التعامل مع الأخطاء في `installer.sh`:
+```bash
+# استخدام `set -e` في بداية السكربت لضمان خروج السكربت فورًا إذا فشل أي أمر
+set -e
+
+# استخدام `trap` لالتقاط الأخطاء وتنفيذ إجراءات التنظيف
+trap 'echo "حدث خطأ. الخروج..."; exit 1' ERR
+
+# التحقق من نجاح الأوامر الحرجة والتعامل مع الأخطاء وفقًا لذلك
+if ! wget -q https://raw.githubusercontent.com/hestiacp/hestiacp/release/install/hst-install.sh; then
+    echo "فشل في تنزيل سكربت HestiaCP."
+    exit 1
+fi
+
+# تجنب تسجيل المعلومات الحساسة مثل كلمات المرور ومفاتيح API
+```
+
+### 15. إعداد وكيل عكسي مع SSL:
+```bash
+# تثبيت Nginx
+sudo apt install -y nginx
+
+# الحصول على شهادة SSL باستخدام Certbot
+sudo apt install -y certbot
+sudo certbot certonly --standalone -d example.com
+
+# إعداد Nginx كوكيل عكسي مع SSL
+sudo nano /etc/nginx/sites-available/odoo
+# أضف التكوين التالي:
+server {
+    listen 80;
+    server_name example.com;
+    return 301 https://$host$request_uri;
+}
+server {
+    listen 443 ssl;
+    server_name example.com;
+    ssl_certificate /etc/letsencrypt/live/example.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/example.com/privkey.pem;
+    location / {
+        proxy_pass http://127.0.0.1:8069;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+
+# تفعيل التكوين وإعادة تشغيل Nginx
+sudo ln -s /etc/nginx/sites-available/odoo /etc/nginx/sites-enabled/
+sudo systemctl restart nginx
+```
