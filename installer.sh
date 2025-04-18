@@ -329,6 +329,13 @@ setup_firewall() {
     fi
 }
 
+# إعداد تجديد الشهادة التلقائي باستخدام Certbot
+setup_certbot_renewal() {
+    echo -e "${BLUE}\nإعداد تجديد الشهادة التلقائي باستخدام Certbot...${NC}" | tee -a "$LOG_FILE"
+    sudo systemctl enable certbot.timer
+    sudo systemctl start certbot.timer
+}
+
 # التنفيذ الرئيسي
 detect_environment
 validate_inputs
@@ -338,6 +345,7 @@ add_odoo_to_hestia_quick_app
 setup_cloudflare
 change_root_password
 setup_firewall
+setup_certbot_renewal
 final_setup
 
 echo -e "${YELLOW}\nملاحظة: تم توليد كلمة مرور عشوائية لهيستيا، تحقق من البريد الإلكتروني${NC}"
