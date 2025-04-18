@@ -336,9 +336,32 @@ setup_certbot_renewal() {
     sudo systemctl start certbot.timer
 }
 
+# التأكد من تثبيت screen و nohup
+ensure_screen_nohup_installed() {
+    echo -e "${BLUE}\nالتأكد من تثبيت screen و nohup...${NC}" | tee -a "$LOG_FILE"
+    sudo apt install -y screen
+    sudo apt install -y coreutils
+}
+
+# استخدام screen أو nohup لضمان استمرار عملية التثبيت
+use_screen_or_nohup() {
+    read -p "هل تريد استخدام screen أو nohup لضمان استمرار عملية التثبيت؟ (s/n): " CONTINUE_METHOD
+    if [[ $CONTINUE_METHOD == [sS] ]]; then
+        echo -e "${BLUE}\nاستخدام screen لضمان استمرار عملية التثبيت...${NC}" | tee -a "$LOG_FILE"
+        screen -S hestia_install -d -m sudo ./installer.sh
+    elif [[ $CONTINUE_METHOD == [nN] ]]; then
+        echo -e "${BLUE}\nاستخدام nohup لضمان استمرار عملية التثبيت...${NC}" | tee -a "$LOG_FILE"
+        nohup sudo ./installer.sh > install.log 2>&1 &
+    else
+        echo -e "${YELLOW}سيتم متابعة التثبيت بدون استخدام screen أو nohup.${NC}" | tee -a "$LOG_FILE"
+    fi
+}
+
 # التنفيذ الرئيسي
 detect_environment
 validate_inputs
+ensure_screen_nohup_installed
+use_screen_or_nohup
 install_hestia
 install_odoo
 add_odoo_to_hestia_quick_app
