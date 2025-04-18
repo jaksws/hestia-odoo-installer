@@ -43,9 +43,7 @@ sudo ufw enable
 ```
 
 ### 6. إضافة Odoo إلى قائمة التطبيقات السريعة في هيستيا:
-```bash
 # تم تضمين هذه الخطوة في السكربت، لا حاجة لإجراء إضافي
-```
 
 ### 7. إعداد HTTPS:
 ```bash
@@ -172,7 +170,7 @@ check_required_packages() {
     local packages=("curl" "wget" "git" "unzip" "dialog" "ca-certificates" "jq" "postgresql-common")
     for package in "${packages[@]}"; do
         if ! dpkg -l | grep -q "$package"; then
-            echo -e "${YELLOW}تثبيت $package...${NC}" | tee -a "$LOG_FILE"
+            echo -e "${YELLOW}تثبيت $package...${NC}"
             sudo apt install -y "$package"
         fi
     done
@@ -187,11 +185,11 @@ progress_indicator() {
     local step=0
 
     while [[ $step -lt $steps ]]; do
-        echo -ne "${GREEN}Progress: $((step * 10))% completed\r${NC}" | tee -a "$LOG_FILE"
+        echo -ne "${GREEN}Progress: $((step * 10))% completed\r${NC}"
         sleep 1
         step=$((step + 1))
     done
-    echo -ne "${GREEN}Progress: 100% completed\n${NC}" | tee -a "$LOG_FILE"
+    echo -ne "${GREEN}Progress: 100% completed\n${NC}"
 }
 ```
 
@@ -319,10 +317,8 @@ tail -f install.log
 ```
 
 ### 16. إعداد خدمة البريد الإلكتروني في هيستيا:
-```bash
 # تثبيت HestiaCP يتضمن خدمات البريد الإلكتروني مثل Exim و Dovecot
 # لا حاجة لإجراء إضافي
-```
 
 ### 17. التعامل مع الأخطاء في `installer.sh`:
 ```bash
