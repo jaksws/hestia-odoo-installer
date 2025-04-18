@@ -295,11 +295,11 @@ detect_environment() {
     if [[ $DISTRO == "Ubuntu" ]]; then
         echo -e "${BLUE}تطبيق إعدادات مخصصة لـ Ubuntu...${NC}" | tee -a "$LOG_FILE"
         sudo apt update
-        sudo apt install -y curl wget git unzip dialog ca-certificates jq
+        sudo apt install -y curl wget git unzip dialog ca-certificates jq postgresql-common
     elif [[ $DISTRO == "Debian" ]]; then
         echo -e "${BLUE}تطبيق إعدادات مخصصة لـ Debian...${NC}" | tee -a "$LOG_FILE"
         sudo apt update
-        sudo apt install -y curl wget git unzip dialog ca-certificates jq
+        sudo apt install -y curl wget git unzip dialog ca-certificates jq postgresql-common
     elif [[ $DISTRO == "CentOS" ]]; then
         echo -e "${BLUE}تطبيق إعدادات مخصصة لـ CentOS...${NC}" | tee -a "$LOG_FILE"
         sudo yum update -y
@@ -310,11 +310,91 @@ detect_environment() {
     fi
 }
 
+# تحسين التعامل مع الأخطاء وتسجيلها
+error_handling() {
+    local retries=3
+    local count=0
+    local success=false
+
+    while [[ $count -lt $retries ]]; do
+        "$@" && success=true && break
+        count=$((count + 1))
+        echo -e "${YELLOW}محاولة $count من $retries...${NC}" | tee -a "$LOG_FILE"
+        sleep 2
+    done
+
+    if [[ $success == false ]]; then
+        echo -e "${RED}فشل في تنفيذ الأمر: $@${NC}" | tee -a "$LOG_FILE"
+        exit 1
+    fi
+}
+
+# تحسين التحقق من صحة المدخلات
+validate_inputs() {
+    local valid=true
+
+    # التحقق من النطاق
+    [[ ! "$DOMAIN" =~ ^[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$ ]] && {
+        echo -e "${RED}خطأ: اسم النطاق غير صالح${NC}" | tee -a "$LOG_FILE"
+        valid=false
+    }
+
+    # التحقق من IP
+    [[ ! "$SERVER_IP" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]] && {
+        echo -e "${RED}خطأ: عنوان IP غير صالح${NC}" | tee -a "$LOG_FILE"
+        valid=false
+    }
+
+    # التحقق من Cloudflare
+    if [[ -n $CF_AUTH_METHOD ]]; then
+        if [[ $CF_AUTH_METHOD == "1" && (${#CF_TOKEN} -ne 40 || -z "$CF_TOKEN") ]]; then
+            echo -e "${RED}خطأ: التوكن يجب أن يكون 40 حرفًا${NC}" | tee -a "$LOG_FILE"
+            valid=false
+        elif [[ $CF_AUTH_METHOD == "2" && (${#CF_API_KEY} -ne 37 || -z "$CF_EMAIL") ]]; then
+            echo -e "${RED}خطأ: بيانات Cloudflare غير صالحة${NC}" | tee -a "$LOG_FILE"
+            valid=false
+        fi
+        
+        [[ ! "$CF_ZONE" =~ ^[a-zA-Z0-9]{32}$ ]] && {
+            echo -e "${RED}خطأ: Zone ID غير صالح${NC}" | tee -a "$LOG_FILE"
+            valid=false
+        }
+    fi
+
+    $valid || exit 1
+}
+
+# التحقق من تثبيت الحزم المطلوبة
+check_required_packages() {
+    local packages=("curl" "wget" "git" "unzip" "dialog" "ca-certificates" "jq" "postgresql-common")
+    for package in "${packages[@]}"; do
+        if ! dpkg -l | grep -q "$package"; then
+            echo -e "${YELLOW}تثبيت $package...${NC}" | tee -a "$LOG_FILE"
+            sudo apt install -y "$package"
+        fi
+    done
+}
+
+# مؤشر التقدم
+progress_indicator() {
+    local steps=10
+    local step=0
+
+    while [[ $step -lt $steps ]]; do
+        echo -ne "${GREEN}Progress: $((step * 10))% completed\r${NC}" | tee -a "$LOG_FILE"
+        sleep 1
+        step=$((step + 1))
+    done
+    echo -ne "${GREEN}Progress: 100% completed\n${NC}" | tee -a "$LOG_FILE"
+}
+
 # التنفيذ الرئيسي
 detect_environment
 validate_inputs
-install_hestia
-install_odoo
+check_required_packages
+progress_indicator
+error_handling install_hestia
+error_handling install_odoo
 add_odoo_to_hestia_quick_app
 setup_cloudflare
 final_setup

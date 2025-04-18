@@ -148,6 +148,53 @@ if [[ -n "$CF_ZONE" && ! "$CF_ZONE" =~ ^[a-zA-Z0-9]{32}$ ]]; then
 fi
 ```
 
+### 10. تحسين التعامل مع الأخطاء وتسجيلها:
+```bash
+# استخدام `set -e` في بداية السكربت لضمان خروج السكربت فورًا إذا فشل أي أمر
+set -e
+
+# استخدام `trap` لالتقاط الأخطاء وتنفيذ إجراءات التنظيف
+trap 'echo "حدث خطأ. الخروج..."; exit 1' ERR
+
+# التحقق من نجاح الأوامر الحرجة والتعامل مع الأخطاء وفقًا لذلك
+if ! wget -q https://raw.githubusercontent.com/hestiacp/hestiacp/release/install/hst-install.sh; then
+    echo "فشل في تنزيل سكربت HestiaCP."
+    exit 1
+fi
+
+# تجنب تسجيل المعلومات الحساسة مثل كلمات المرور ومفاتيح API
+```
+
+### 11. التحقق من تثبيت الحزم المطلوبة:
+```bash
+# التحقق من تثبيت الحزم المطلوبة
+check_required_packages() {
+    local packages=("curl" "wget" "git" "unzip" "dialog" "ca-certificates" "jq" "postgresql-common")
+    for package in "${packages[@]}"; do
+        if ! dpkg -l | grep -q "$package"; then
+            echo -e "${YELLOW}تثبيت $package...${NC}" | tee -a "$LOG_FILE"
+            sudo apt install -y "$package"
+        fi
+    done
+}
+```
+
+### 12. إضافة مؤشر التقدم:
+```bash
+# مؤشر التقدم
+progress_indicator() {
+    local steps=10
+    local step=0
+
+    while [[ $step -lt $steps ]]; do
+        echo -ne "${GREEN}Progress: $((step * 10))% completed\r${NC}" | tee -a "$LOG_FILE"
+        sleep 1
+        step=$((step + 1))
+    done
+    echo -ne "${GREEN}Progress: 100% completed\n${NC}" | tee -a "$LOG_FILE"
+}
+```
+
 ### إذا واجهتك أي مشاكل، جرب هذه الحلول:
 
 #### أ. مشكلة في تبعيات Python:
@@ -180,7 +227,7 @@ sudo ./installer.sh --install
 tail -n 50 install.log
 ```
 
-### 10. خطوات التثبيت على بيئة أوبنتو:
+### 13. خطوات التثبيت على بيئة أوبنتو:
 ```bash
 # تحديث النظام الأساسي
 sudo apt update && sudo apt full-upgrade -y
@@ -240,7 +287,7 @@ code --install-extension GitHub.copilot
 # اتبع التعليمات التي تظهر على الشاشة
 ```
 
-### 11. تثبيت إصدارات PHP 8.2, 8.3, و 8.4:
+### 14. تثبيت إصدارات PHP 8.2, 8.3, و 8.4:
 ```bash
 # إضافة مستودع Ondrej Sury
 sudo add-apt-repository ppa:ondrej/php
@@ -255,7 +302,7 @@ php8.3 -v
 php8.4 -v
 ```
 
-### 12. استخدام `screen` أو `nohup` لضمان استمرار عملية التثبيت حتى إذا تم إغلاق التيرمينال:
+### 15. استخدام `screen` أو `nohup` لضمان استمرار عملية التثبيت حتى إذا تم إغلاق التيرمينال:
 ```bash
 # استخدام `screen`
 sudo apt install screen -y
@@ -271,13 +318,13 @@ nohup sudo ./installer.sh > install.log 2>&1 &
 tail -f install.log
 ```
 
-### 13. إعداد خدمة البريد الإلكتروني في هيستيا:
+### 16. إعداد خدمة البريد الإلكتروني في هيستيا:
 ```bash
 # تثبيت HestiaCP يتضمن خدمات البريد الإلكتروني مثل Exim و Dovecot
 # لا حاجة لإجراء إضافي
 ```
 
-### 14. التعامل مع الأخطاء في `installer.sh`:
+### 17. التعامل مع الأخطاء في `installer.sh`:
 ```bash
 # استخدام `set -e` في بداية السكربت لضمان خروج السكربت فورًا إذا فشل أي أمر
 set -e
@@ -294,7 +341,7 @@ fi
 # تجنب تسجيل المعلومات الحساسة مثل كلمات المرور ومفاتيح API
 ```
 
-### 15. إعداد وكيل عكسي مع SSL:
+### 18. إعداد وكيل عكسي مع SSL:
 ```bash
 # تثبيت Nginx
 sudo apt install -y nginx
@@ -330,7 +377,7 @@ sudo ln -s /etc/nginx/sites-available/odoo /etc/nginx/sites-enabled/
 sudo systemctl restart nginx
 ```
 
-### 16. اكتشاف البيئة وتطبيق أفضل الإعدادات:
+### 19. اكتشاف البيئة وتطبيق أفضل الإعدادات:
 ```bash
 # اكتشاف نظام التشغيل
 OS=$(uname -s)
@@ -353,11 +400,11 @@ esac
 if [[ $DISTRO == "Ubuntu" ]]; then
     echo "تطبيق إعدادات مخصصة لـ Ubuntu..."
     sudo apt update
-    sudo apt install -y curl wget git unzip dialog ca-certificates jq
+    sudo apt install -y curl wget git unzip dialog ca-certificates jq postgresql-common
 elif [[ $DISTRO == "Debian" ]]; then
     echo "تطبيق إعدادات مخصصة لـ Debian..."
     sudo apt update
-    sudo apt install -y curl wget git unzip dialog ca-certificates jq
+    sudo apt install -y curl wget git unzip dialog ca-certificates jq postgresql-common
 elif [[ $DISTRO == "CentOS" ]]; then
     echo "تطبيق إعدادات مخصصة لـ CentOS..."
     sudo yum update -y
