@@ -90,7 +90,7 @@ validate_inputs() {
         if [[ $CF_AUTH_METHOD == "1" && (${#CF_TOKEN} -ne 40 || -z "$CF_TOKEN") ]]; then
             echo -e "${RED}خطأ: التوكن يجب أن يكون 40 حرفًا${NC}" | tee -a "$LOG_FILE"
             valid=false
-        elif [[ $CF_AUTH_METHOD == "2" && (${#CF_API_KEY} -ne 37 || -z "$CF_EMAIL") ]]; then
+        elif [[ $CF_AUTH_METHOD == "2" && (${#CF_API_KEY} -ne 37 || -ز "$CF_EMAIL") ]]; then
             echo -e "${RED}خطأ: بيانات Cloudflare غير صالحة${NC}" | tee -a "$LOG_FILE"
             valid=false
         fi
@@ -158,9 +158,9 @@ EOF
 
 # إعداد Cloudflare
 setup_cloudflare() {
-    [[ -z $CF_AUTH_METHOD ]] && return
+    [[ -ز $CF_AUTH_METHOD ]] && return
 
-    echo -e "${BLUE}\nجاري إعداد Cloudflare DNS...${NC}" | tee -a "$LOG_FILE"
+    echo -e "${BLUE}\ن جاري إعداد Cloudflare DNS...${NC}" | tee -a "$LOG_FILE"
     
     # تحديد رؤوس المصادقة
     if [[ $CF_AUTH_METHOD == "1" ]]; then
@@ -203,7 +203,7 @@ setup_cloudflare() {
                 ;;
             "TXT")
                 content="v=spf1 a mx ~all"
-                data=$(jq -n \
+                data=$(jq -ن \
                     --arg type "$type" \
                     --arg name "@" \
                     --arg content "$content" \
@@ -273,7 +273,7 @@ final_setup() {
 
 # اكتشاف البيئة وتطبيق أفضل الإعدادات
 detect_environment() {
-    echo -e "${BLUE}\nاكتشاف البيئة وتطبيق أفضل الإعدادات...${NC}" | tee -a "$LOG_FILE"
+    echo -e "${BLUE}\ن اكتشاف البيئة وتطبيق أفضل الإعدادات...${NC}" | tee -a "$LOG_FILE"
     # اكتشاف نظام التشغيل
     OS=$(uname -s)
     case $OS in
@@ -312,7 +312,7 @@ detect_environment() {
 
 # تغيير كلمة مرور root
 change_root_password() {
-    echo -e "${BLUE}\nتغيير كلمة مرور root...${NC}" | tee -a "$LOG_FILE"
+    echo -e "${BLUE}\ن تغيير كلمة مرور root...${NC}" | tee -a "$LOG_FILE"
     passwd root
 }
 
@@ -320,7 +320,7 @@ change_root_password() {
 setup_firewall() {
     read -p "هل تريد إعداد جدار الحماية؟ (y/n): " FIREWALL_CONFIRM
     if [[ $FIREWALL_CONFIRM == [yY] ]]; then
-        echo -e "${BLUE}\nإعداد جدار الحماية...${NC}" | tee -a "$LOG_FILE"
+        echo -e "${BLUE}\ن إعداد جدار الحماية...${NC}" | tee -a "$LOG_FILE"
         sudo ufw allow 2083/tcp
         sudo ufw allow 8069/tcp
         sudo ufw enable
@@ -329,15 +329,82 @@ setup_firewall() {
     fi
 }
 
+# إعداد تجديد الشهادة التلقائي باستخدام Certbot
+setup_certbot_renewal() {
+    echo -e "${BLUE}\ن إعداد تجديد الشهادة التلقائي باستخدام Certbot...${NC}" | tee -a "$LOG_FILE"
+    sudo systemctl enable certbot.timer
+    sudo systemctl start certbot.timer
+}
+
+# التأكد من تثبيت screen و nohup
+ensure_screen_nohup_installed() {
+    echo -e "${BLUE}\ن التأكد من تثبيت screen و nohup...${NC}" | tee -a "$LOG_FILE"
+    sudo apt install -y screen
+    sudo apt install -y coreutils
+}
+
+# استخدام screen أو nohup لضمان استمرار عملية التثبيت
+use_screen_or_nohup() {
+    read -p "هل تريد استخدام screen أو nohup لضمان استمرار عملية التثبيت؟ (s/n): " CONTINUE_METHOD
+    if [[ $CONTINUE_METHOD == [sS] ]]; then
+        echo -e "${BLUE}\ن استخدام screen لضمان استمرار عملية التثبيت...${NC}" | tee -a "$LOG_FILE"
+        screen -S hestia_install -d -m sudo ./installer.sh
+    elif [[ $CONTINUE_METHOD == [nN] ]]; then
+        echo -e "${BLUE}\ن استخدام nohup لضمان استمرار عملية التثبيت...${NC}" | tee -a "$LOG_FILE"
+        nohup sudo ./installer.sh > install.log 2>&1 &
+    else
+        echo -e "${YELLOW}سيتم متابعة التثبيت بدون استخدام screen أو nohup.${NC}" | tee -a "$LOG_FILE"
+    fi
+}
+
+# إعداد Nginx كوكيل عكسي
+setup_nginx_reverse_proxy() {
+    echo -e "${BLUE}\ن إعداد Nginx كوكيل عكسي...${NC}" | tee -a "$LOG_FILE"
+    sudo apt install -y nginx
+    sudo systemctl start nginx
+    sudo systemctl enable nginx
+
+    cat > /etc/nginx/sites-available/odoo <<EOF
+server {
+    listen 80;
+    server_name ${DOMAIN};
+    return 301 https://\$host\$request_uri;
+}
+
+server {
+    listen 443 ssl;
+    server_name ${DOMAIN};
+
+    ssl_certificate /etc/letsencrypt/live/${DOMAIN}/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/${DOMAIN}/privkey.pem;
+
+    location / {
+        proxy_pass http://127.0.0.1:${ODOO_PORT};
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+    }
+}
+EOF
+
+    sudo ln -s /etc/nginx/sites-available/odoo /etc/nginx/sites-enabled/
+    sudo systemctl restart nginx
+}
+
 # التنفيذ الرئيسي
 detect_environment
 validate_inputs
+ensure_screen_nohup_installed
+use_screen_or_nohup
 install_hestia
 install_odoo
 add_odoo_to_hestia_quick_app
 setup_cloudflare
 change_root_password
 setup_firewall
+setup_certbot_renewal
+setup_nginx_reverse_proxy
 final_setup
 
-echo -e "${YELLOW}\nملاحظة: تم توليد كلمة مرور عشوائية لهيستيا، تحقق من البريد الإلكتروني${NC}"
+echo -e "${YELLOW}\ن ملاحظة: تم توليد كلمة مرور عشوائية لهيستيا، تحقق من البريد الإلكتروني${NC}"

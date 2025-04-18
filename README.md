@@ -81,6 +81,10 @@ server {
 # تفعيل التكوين
 sudo ln -s /etc/nginx/sites-available/odoo /etc/nginx/sites-enabled/
 sudo systemctl restart nginx
+
+# إعداد تجديد الشهادة التلقائي باستخدام Certbot
+sudo systemctl enable certbot.timer
+sudo systemctl start certbot.timer
 ```
 
 ### 8. تكامل GitHub Copilot:
