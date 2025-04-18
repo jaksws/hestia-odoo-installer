@@ -115,7 +115,7 @@ install_hestia() {
         --password "$(openssl rand -base64 12)" \
         --port ${HESTIA_PORT} \
         --apache no \
-        --multiphp yes \
+        --multiphp '8.2,8.3,8.4' \
         --mysql yes \
         --postgresql yes \
         --named yes \
