@@ -310,6 +310,25 @@ detect_environment() {
     fi
 }
 
+# تغيير كلمة مرور root
+change_root_password() {
+    echo -e "${BLUE}\nتغيير كلمة مرور root...${NC}" | tee -a "$LOG_FILE"
+    passwd root
+}
+
+# إعداد جدار الحماية
+setup_firewall() {
+    read -p "هل تريد إعداد جدار الحماية؟ (y/n): " FIREWALL_CONFIRM
+    if [[ $FIREWALL_CONFIRM == [yY] ]]; then
+        echo -e "${BLUE}\nإعداد جدار الحماية...${NC}" | tee -a "$LOG_FILE"
+        sudo ufw allow 2083/tcp
+        sudo ufw allow 8069/tcp
+        sudo ufw enable
+    else
+        echo -e "${YELLOW}تحذير: لم يتم إعداد جدار الحماية. من المهم إعداد جدار الحماية لحماية السيرفر.${NC}" | tee -a "$LOG_FILE"
+    fi
+}
+
 # التنفيذ الرئيسي
 detect_environment
 validate_inputs
@@ -317,6 +336,8 @@ install_hestia
 install_odoo
 add_odoo_to_hestia_quick_app
 setup_cloudflare
+change_root_password
+setup_firewall
 final_setup
 
 echo -e "${YELLOW}\nملاحظة: تم توليد كلمة مرور عشوائية لهيستيا، تحقق من البريد الإلكتروني${NC}"
