@@ -409,14 +409,16 @@ detect_environment
 validate_inputs
 ensure_screen_nohup_installed
 use_screen_or_nohup
-install_hestia
-install_odoo
+install_hestia &
+install_odoo &
+wait
 add_odoo_to_hestia_quick_app
-setup_cloudflare
+setup_cloudflare &
 change_root_password
 setup_firewall
 setup_certbot_renewal
 setup_nginx_reverse_proxy
+wait
 final_setup
 
 echo -e "${YELLOW}\n ملاحظة: تم توليد كلمة مرور عشوائية لهيستيا، تحقق من البريد الإلكتروني${NC}"
