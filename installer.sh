@@ -27,9 +27,21 @@ cat << "EOF"
 EOF
 echo -e "${NC}"
 
+# Fetch the public IP using curl
+SERVER_IP=$(curl -s ifconfig.me)
+if [[ -z "$SERVER_IP" ]]; then
+    SERVER_IP=$(curl -s api.ipify.org)
+fi
+
+if [[ -z "$SERVER_IP" ]]; then
+    echo -e "${RED}Failed to fetch the public IP. Please enter the IP manually.${NC}"
+    read -p "أدخل عنوان IP الخاص بالسيرفر: " SERVER_IP
+fi
+
 # طلب المدخلات
 read -p "أدخل اسم النطاق الرئيسي (مثال: jaksws.com): " DOMAIN
-read -p "أدخل عنوان IP الخاص بالسيرفر: " SERVER_IP
+read -p "أدخل عنوان IP الخاص بالسيرفر (الافتراضي: $SERVER_IP): " SERVER_IP_INPUT
+SERVER_IP=${SERVER_IP_INPUT:-$SERVER_IP}
 read -p "أدخل منفذ هيستيا (الافتراضي 2083): " HESTIA_PORT
 HESTIA_PORT=${HESTIA_PORT:-2083}
 
