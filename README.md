@@ -529,3 +529,32 @@ chown $USER:$USER $ODDO_DIR/installation-info.txt
 
 echo "تم الانتهاء من التثبيت! تفاصيل التثبيت في: $ODDO_DIR/installation-info.txt"
 ```
+
+### 19. إعداد نظام النسخ الاحتياطي التلقائي:
+```bash
+# إنشاء سكربت النسخ الاحتياطي
+sudo tee /usr/local/bin/odoo-backup <<EOL
+#!/bin/bash
+BACKUP_DIR="/backups/odoo"
+mkdir -p \$BACKUP_DIR
+docker exec \$(docker ps -aqf "name=postgres") pg_dump -U $DB_USER $DB_NAME > \$BACKUP_DIR/\$(date +%F).sql
+tar -czf \$BACKUP_DIR/\$(date +%F).tar.gz /var/lib/docker/volumes
+EOL
+
+# إعداد Cron Job
+sudo chmod +x /usr/local/bin/odoo-backup
+(crontab -l 2>/dev/null; echo "0 3 * * * /usr/local/bin/odoo-backup") | crontab -
+```
+
+### 20. استكشاف الأخطاء وإصلاحها:
+```bash
+# التحقق من تعارض المنافذ
+ss -tulpn | grep '8069\|5432'
+
+# التحقق من حالة الخدمات
+systemctl status nginx postgresql docker
+
+# فحص السجلات
+tail -50 /var/log/nginx/error.log
+docker logs \$(docker ps -aqf "name=odoo")
+```

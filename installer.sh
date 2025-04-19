@@ -410,3 +410,176 @@ setup_nginx_reverse_proxy
 final_setup
 
 echo -e "${YELLOW}\n ملاحظة: تم توليد كلمة مرور عشوائية لهيستيا، تحقق من البريد الإلكتروني${NC}"
+
+# Add a section to install system dependencies
+install_dependencies() {
+    echo -e "${BLUE}\nUpdating system and installing dependencies...${NC}" | tee -a "$LOG_FILE"
+    sudo apt update && sudo apt full-upgrade -y
+    sudo apt install -y curl wget git unzip dialog ca-certificates jq python3-dev python3-pip python3-venv
+}
+
+# Add a section to download and prepare the script
+download_prepare_script() {
+    echo -e "${BLUE}\nDownloading and preparing the script...${NC}" | tee -a "$LOG_FILE"
+    wget https://raw.githubusercontent.com/jaksws/hestia-odoo-installer/main/installer.sh
+    chmod +x installer.sh
+    dos2unix installer.sh
+}
+
+# Add a section for safe execution with monitoring using screen
+safe_execution_with_monitoring() {
+    echo -e "${BLUE}\nUsing screen for persistent installation...${NC}" | tee -a "$LOG_FILE"
+    screen -S hestia_install -L -Logfile install.log ./installer.sh --install
+}
+
+# Add a section for installation verification
+installation_verification() {
+    echo -e "${BLUE}\nVerifying installation...${NC}" | tee -a "$LOG_FILE"
+    curl -k https://localhost:2083 && echo "HestiaCP working properly" || echo "HestiaCP verification failed"
+    curl -I http://localhost:8069 && echo "Odoo working properly" || echo "Odoo verification failed"
+    tail -n 50 install.log | grep "ERROR\|WARN\|INFO"
+}
+
+# Add a section for advanced security settings
+advanced_security_settings() {
+    echo -e "${BLUE}\nConfiguring advanced security settings...${NC}" | tee -a "$LOG_FILE"
+    # Firewall Configuration
+    sudo ufw allow 2083/tcp   # HestiaCP
+    sudo ufw allow 8069/tcp   # Odoo
+    sudo ufw allow 443/tcp    # HTTPS
+    sudo ufw enable
+
+    # Install Fail2ban
+    sudo apt install -y fail2ban
+    sudo systemctl start fail2ban
+    sudo systemctl enable fail2ban
+}
+
+# Add a section for HTTPS configuration with Certbot
+https_configuration_with_certbot() {
+    read -p "Enter your domain (e.g. odoo.example.com): " DOMAIN
+    sudo apt install -y certbot
+    sudo certbot certonly --standalone -d $DOMAIN --non-interactive --agree-tos -m admin@$DOMAIN
+
+    # Nginx Configuration
+    sudo tee /etc/nginx/sites-available/odoo <<EOL
+server {
+    listen 80;
+    server_name $DOMAIN;
+    return 301 https://\$host\$request_uri;
+}
+
+server {
+    listen 443 ssl;
+    server_name $DOMAIN;
+
+    ssl_certificate /etc/letsencrypt/live/$DOMAIN/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/$DOMAIN/privkey.pem;
+
+    location / {
+        proxy_pass http://127.0.0.1:8069;
+        include proxy_params;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+    }
+
+    # Enhanced Security Headers
+    add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
+    add_header X-Content-Type-Options nosniff;
+    add_header X-Frame-Options "SAMEORIGIN";
+    add_header Content-Security-Policy "default-src 'self' https: data: 'unsafe-inline' 'unsafe-eval';";
+}
+EOL
+
+    # Activate Configuration
+    sudo ln -s /etc/nginx/sites-available/odoo /etc/nginx/sites-enabled/
+    sudo nginx -t && sudo systemctl restart nginx
+}
+
+# Add a section for Docker integration
+docker_integration() {
+    # Install Docker
+    if ! command -v docker &> /dev/null; then
+        curl -fsSL https://get.docker.com | sudo sh
+        sudo usermod -aG docker $USER
+    fi
+
+    # Docker Compose Configuration
+    read -p "Enter database name: " DB_NAME
+    read -p "Enter database user: " DB_USER
+    DB_PASS=$(openssl rand -base64 24)
+
+    sudo tee docker-compose.yml <<EOL
+version: '3'
+services:
+  odoo:
+    image: odoo:16
+    ports:
+      - "8069:8069"
+    volumes:
+      - odoo-data:/var/lib/odoo
+    environment:
+      - HOST=postgres
+      - USER=$DB_USER
+      - PASSWORD=$DB_PASS
+    depends_on:
+      - postgres
+
+  postgres:
+    image: postgres:13
+    environment:
+      POSTGRES_USER: $DB_USER
+      POSTGRES_PASSWORD: $DB_PASS
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+
+volumes:
+  odoo-data:
+  postgres-data:
+EOL
+
+    # Start Containers
+    docker-compose up -d
+}
+
+# Add a section for automatic backup system
+automatic_backup_system() {
+    # Create Backup Script
+    sudo tee /usr/local/bin/odoo-backup <<EOL
+#!/bin/bash
+BACKUP_DIR="/backups/odoo"
+mkdir -p \$BACKUP_DIR
+docker exec \$(docker ps -aqf "name=postgres") pg_dump -U $DB_USER $DB_NAME > \$BACKUP_DIR/\$(date +%F).sql
+tar -czf \$BACKUP_DIR/\$(date +%F).tar.gz /var/lib/docker/volumes
+EOL
+
+    # Configure Cron Job
+    sudo chmod +x /usr/local/bin/odoo-backup
+    (crontab -l 2>/dev/null; echo "0 3 * * * /usr/local/bin/odoo-backup") | crontab -
+}
+
+# Add a section for troubleshooting
+troubleshooting() {
+    function check_errors() {
+        echo -e "${BLUE}\nChecking for common issues...${NC}" | tee -a "$LOG_FILE"
+        # Check port conflicts
+        ss -tulpn | grep '8069\|5432'
+        
+        # Check service status
+        systemctl status nginx postgresql docker
+        
+        # Check logs
+        tail -50 /var/log/nginx/error.log
+        docker logs \$(docker ps -aqf "name=odoo")
+    }
+}
+
+# Main execution
+install_dependencies
+download_prepare_script
+safe_execution_with_monitoring
+installation_verification
+advanced_security_settings
+https_configuration_with_certbot
+docker_integration
+automatic_backup_system
+troubleshooting
