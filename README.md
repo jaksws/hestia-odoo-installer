@@ -150,6 +150,174 @@ if [[ -n "$CF_ZONE" && ! "$CF_ZONE" =~ ^[a-zA-Z0-9]{32}$ ]]; then
 fi
 ```
 
+### 10. إعداد تدوير ملفات السجل باستخدام logrotate:
+```bash
+# إنشاء ملف تكوين logrotate
+sudo nano /etc/logrotate.d/hestia_installer
+
+# أضف التكوين التالي:
+/var/log/hestia_installer/install.log {
+    daily
+    rotate 7
+    compress
+    missingok
+    notifempty
+    create 0644 root root
+    postrotate
+        systemctl reload hestia_installer
+    endscript
+}
+
+# التحقق من حالة خدمة logrotate
+sudo systemctl status logrotate
+sudo systemctl enable logrotate
+```
+
+### 11. التعامل مع انقطاعات السكربت:
+```bash
+# إنشاء ملف السجل
+mkdir -p /var/log/hestia_installer
+chmod 755 /var/log/hestia_installer
+
+# إنشاء ملف الحالة
+touch /var/log/hestia_installer/status.txt
+
+# التحقق من وجود ملف الحالة في بداية السكربت
+if [ -f "/var/log/hestia_installer/status.txt" ]; then
+    source "/var/log/hestia_installer/status.txt"
+    if [ -n "$current_step" ]; then
+        echo "تم اكتشاف عملية تثبيت سابقة. الخطوة الحالية: $current_step"
+        echo "1) متابعة من الخطوة الأخيرة"
+        echo "2) إعادة التثبيت من البداية"
+        echo "3) إلغاء التثبيت السابق"
+        read -p "اختر خيارًا (1/2/3): " USER_CHOICE
+        case $USER_CHOICE in
+            1)
+                echo "متابعة التثبيت..."
+                ;;
+            2)
+                echo "إعادة التثبيت من البداية..."
+                current_step=""
+                ;;
+            3)
+                echo "إلغاء التثبيت السابق..."
+                current_step=""
+                ;;
+            *)
+                echo "خيار غير صالح. الخروج..."
+                exit 1
+                ;;
+        esac
+    fi
+fi
+
+# تحديث ملف الحالة في كل خطوة من السكربت
+echo "current_step=install_hestia" > /var/log/hestia_installer/status.txt
+echo "current_step=install_odoo" > /var/log/hestia_installer/status.txt
+echo "current_step=setup_cloudflare" > /var/log/hestia_installer/status.txt
+echo "current_step=add_odoo_to_hestia_quick_app" > /var/log/hestia_installer/status.txt
+echo "current_step=final_setup" > /var/log/hestia_installer/status.txt
+```
+
+### 12. استخدام ملفات الحالة لتتبع التقدم:
+```bash
+# إنشاء ملف الحالة
+touch /var/log/hestia_installer/status.txt
+
+# تحديث ملف الحالة في كل خطوة من السكربت
+echo "current_step=install_hestia" > /var/log/hestia_installer/status.txt
+echo "current_step=install_odoo" > /var/log/hestia_installer/status.txt
+echo "current_step=setup_cloudflare" > /var/log/hestia_installer/status.txt
+echo "current_step=add_odoo_to_hestia_quick_app" > /var/log/hestia_installer/status.txt
+echo "current_step=final_setup" > /var/log/hestia_installer/status.txt
+
+# التحقق من ملف الحالة في بداية السكربت
+if [ -f "/var/log/hestia_installer/status.txt" ]; then
+    source "/var/log/hestia_installer/status.txt"
+    if [ -n "$current_step" ]; then
+        echo "تم اكتشاف عملية تثبيت سابقة. الخطوة الحالية: $current_step"
+        echo "1) متابعة من الخطوة الأخيرة"
+        echo "2) إعادة التثبيت من البداية"
+        echo "3) إلغاء التثبيت السابق"
+        read -p "اختر خيارًا (1/2/3): " USER_CHOICE
+        case $USER_CHOICE in
+            1)
+                echo "متابعة التثبيت..."
+                ;;
+            2)
+                echo "إعادة التثبيت من البداية..."
+                current_step=""
+                ;;
+            3)
+                echo "إلغاء التثبيت السابق..."
+                current_step=""
+                ;;
+            *)
+                echo "خيار غير صالح. الخروج..."
+                exit 1
+                ;;
+        esac
+    fi
+fi
+```
+
+### 13. استخدام المتغيرات البيئية لتتبع التقدم:
+```bash
+# تحديث المتغيرات البيئية في كل خطوة من السكربت
+export CURRENT_STEP=install_hestia
+export CURRENT_STEP=install_odoo
+export CURRENT_STEP=setup_cloudflare
+export CURRENT_STEP=add_odoo_to_hestia_quick_app
+export CURRENT_STEP=final_setup
+
+# التحقق من المتغيرات البيئية في بداية السكربت
+if [ -n "$CURRENT_STEP" ]; then
+    echo "تم اكتشاف عملية تثبيت سابقة. الخطوة الحالية: $CURRENT_STEP"
+    echo "1) متابعة من الخطوة الأخيرة"
+    echo "2) إعادة التثبيت من البداية"
+    echo "3) إلغاء التثبيت السابق"
+    read -p "اختر خيارًا (1/2/3): " USER_CHOICE
+    case $USER_CHOICE in
+        1)
+            echo "متابعة التثبيت..."
+            ;;
+        2)
+            echo "إعادة التثبيت من البداية..."
+            export CURRENT_STEP=""
+            ;;
+        3)
+            echo "إلغاء التثبيت السابق..."
+            export CURRENT_STEP=""
+            ;;
+        *)
+            echo "خيار غير صالح. الخروج..."
+            exit 1
+            ;;
+    esac
+fi
+```
+
+### 14. اختبار سلوك السكربت في بيئات مختلفة:
+```bash
+# استخدام الأجهزة الافتراضية
+# إعداد الأجهزة الافتراضية بأنظمة تشغيل وتوزيعات مختلفة لاختبار السكربت
+
+# استخدام خدمات السحابة
+# استخدام خدمات السحابة مثل AWS و Google Cloud و Azure لإنشاء مثيلات بأنظمة تشغيل وتوزيعات مختلفة
+
+# استخدام Docker
+# إنشاء حاويات Docker ببيئات أساسية مختلفة لاختبار السكربت
+
+# التحقق من وجود ملفات السجل والحالة في كل بيئة
+# التحقق من وجود ملفات السجل والحالة وتحديثها بشكل صحيح في كل بيئة
+
+# اختبار انقطاعات السكربت
+# محاكاة انقطاعات في تنفيذ السكربت والتحقق من استئناف السكربت بشكل صحيح من الخطوة الأخيرة
+
+# التحقق من صحة الإدخالات
+# التحقق من صحة الإدخالات في كل بيئة لضمان توافقها مع السكربت
+```
+
 ### إذا واجهتك أي مشاكل، جرب هذه الحلول:
 
 #### أ. مشكلة في تبعيات Python:
@@ -182,7 +350,7 @@ sudo ./installer.sh --install
 tail -n 50 install.log
 ```
 
-### 10. خطوات التثبيت على بيئة أوبنتو:
+### 15. خطوات التثبيت على بيئة أوبنتو:
 ```bash
 # تحديث النظام الأساسي
 sudo apt update && sudo apt full-upgrade -y
@@ -242,7 +410,7 @@ code --install-extension GitHub.copilot
 # اتبع التعليمات التي تظهر على الشاشة
 ```
 
-### 11. تثبيت إصدارات PHP 8.2, 8.3, و 8.4:
+### 16. تثبيت إصدارات PHP 8.2, 8.3, و 8.4:
 ```bash
 # إضافة مستودع Ondrej Sury
 sudo add-apt-repository ppa:ondrej/php
@@ -257,7 +425,7 @@ php8.3 -v
 php8.4 -v
 ```
 
-### 12. استخدام `screen` أو `nohup` لضمان استمرار عملية التثبيت حتى إذا تم إغلاق التيرمينال:
+### 17. استخدام `screen` أو `nohup` لضمان استمرار عملية التثبيت حتى إذا تم إغلاق التيرمينال:
 ```bash
 # استخدام `screen`
 sudo apt install screen -y
@@ -273,46 +441,13 @@ nohup sudo ./installer.sh > install.log 2>&1 &
 tail -f install.log
 ```
 
-### 13. استخدام `tmux` لضمان استمرار عملية التثبيت حتى إذا تم إغلاق التيرمينال:
-```bash
-# استخدام `tmux`
-sudo apt install tmux -y
-tmux new -s hestia_install
-sudo ./installer.sh
-# اضغط `Ctrl+B` ثم `D` للانفصال عن الجلسة.
-# أعِد الاتصال لاحقًا بـ:
-tmux attach -t hestia_install
-```
-
-### 14. استخدام `systemd` لضمان استمرار عملية التثبيت حتى إذا تم إغلاق التيرمينال:
-```bash
-# إنشاء ملف وحدة خدمة systemd
-sudo nano /etc/systemd/system/hestia_install.service
-# أضف التكوين التالي:
-[Unit]
-Description=Hestia-Odoo Installer
-After=network.target
-
-[Service]
-ExecStart=/path/to/installer.sh
-Restart=on-failure
-
-[Install]
-WantedBy=multi-user.target
-
-# تفعيل الخدمة
-sudo systemctl daemon-reload
-sudo systemctl enable hestia_install.service
-sudo systemctl start hestia_install.service
-```
-
-### 15. إعداد خدمة البريد الإلكتروني في هيستيا:
+### 18. إعداد خدمة البريد الإلكتروني في هيستيا:
 ```bash
 # تثبيت HestiaCP يتضمن خدمات البريد الإلكتروني مثل Exim و Dovecot
 # لا حاجة لإجراء إضافي
 ```
 
-### 16. التعامل مع الأخطاء في `installer.sh`:
+### 19. التعامل مع الأخطاء في `installer.sh`:
 ```bash
 # استخدام `set -e` في بداية السكربت لضمان خروج السكربت فورًا إذا فشل أي أمر
 set -e
@@ -329,7 +464,7 @@ fi
 # تجنب تسجيل المعلومات الحساسة مثل كلمات المرور ومفاتيح API
 ```
 
-### 17. إعداد وكيل عكسي مع SSL:
+### 20. إعداد وكيل عكسي مع SSL:
 ```bash
 # تثبيت Nginx
 sudo apt install -y nginx
@@ -365,7 +500,7 @@ sudo ln -s /etc/nginx/sites-available/odoo /etc/nginx/sites-enabled/
 sudo systemctl restart nginx
 ```
 
-### 18. اكتشاف البيئة وتطبيق أفضل الإعدادات:
+### 21. اكتشاف البيئة وتطبيق أفضل الإعدادات:
 ```bash
 # اكتشاف نظام التشغيل
 OS=$(uname -s)

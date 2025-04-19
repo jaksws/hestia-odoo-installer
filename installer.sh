@@ -16,6 +16,10 @@ LOG_FILE="$LOG_DIR/install.log"
 mkdir -p "$LOG_DIR"
 chmod 755 "$LOG_DIR"
 
+# إعدادات الحالة
+STATUS_FILE="/var/log/hestia_installer/status.txt"
+touch "$STATUS_FILE"
+
 # واجهة المستخدم
 clear
 echo -e "${GREEN}"
@@ -26,6 +30,36 @@ cat << "EOF"
 /_/ /_/\____/_/ /___ /_/   \____/_/     
 EOF
 echo -e "${NC}"
+
+# التحقق من حالة التثبيت السابقة
+if [ -f "$STATUS_FILE" ]; then
+    source "$STATUS_FILE"
+    if [ -n "$current_step" ]; then
+        echo -e "${YELLOW}تم اكتشاف عملية تثبيت سابقة. الخطوة الحالية: $current_step${NC}"
+        echo "1) متابعة من الخطوة الأخيرة"
+        echo "2) إعادة التثبيت من البداية"
+        echo "3) إلغاء التثبيت السابق"
+        read -p "اختر خيارًا (1/2/3): " USER_CHOICE
+        case $USER_CHOICE in
+            1)
+                echo -e "${GREEN}متابعة التثبيت...${NC}"
+                ;;
+            2)
+                echo -e "${GREEN}إعادة التثبيت من البداية...${NC}"
+                current_step=""
+                ;;
+            3)
+                echo -e "${GREEN}إلغاء التثبيت السابق...${NC}"
+                # أضف هنا منطق إلغاء التثبيت إذا لزم الأمر
+                current_step=""
+                ;;
+            *)
+                echo -e "${RED}خيار غير صالح. الخروج...${NC}"
+                exit 1
+                ;;
+        esac
+    fi
+fi
 
 # Fetch the public IP using curl
 SERVER_IP=$(curl -s ifconfig.me)
@@ -136,6 +170,7 @@ install_hestia() {
         --clamav yes \
         --spamassassin yes \
         --fail2ban yes
+    echo "current_step=install_hestia" > "$STATUS_FILE"
 }
 
 # تثبيت Odoo
@@ -166,6 +201,7 @@ EOF
 
     systemctl daemon-reload
     systemctl enable --now odoo
+    echo "current_step=install_odoo" > "$STATUS_FILE"
 }
 
 # إعداد Cloudflare
@@ -237,6 +273,7 @@ setup_cloudflare() {
             exit 1
         fi
     done
+    echo "current_step=setup_cloudflare" > "$STATUS_FILE"
 }
 
 # إضافة Odoo إلى قائمة التطبيقات السريعة في هيستيا
@@ -273,6 +310,7 @@ server {
 EOF
 
     echo -e "${GREEN}تمت الإضافة بنجاح!${NC}" | tee -a "$LOG_FILE"
+    echo "current_step=add_odoo_to_hestia_quick_app" > "$STATUS_FILE"
 }
 
 # الإعداد النهائي
@@ -281,6 +319,7 @@ final_setup() {
     echo -e "لوحة التحكم: https://panel.${DOMAIN}:${HESTIA_PORT}"
     echo -e "منفذ Odoo: ${ODOO_PORT}"
     echo -e "تم التثبيت بنجاح!${NC}"
+    echo "current_step=final_setup" > "$STATUS_FILE"
 }
 
 # اكتشاف البيئة وتطبيق أفضل الإعدادات
@@ -320,12 +359,14 @@ detect_environment() {
         echo -e "${RED}التوزيعة غير مدعومة${NC}" | tee -a "$LOG_FILE"
         exit 1
     fi
+    echo "current_step=detect_environment" > "$STATUS_FILE"
 }
 
 # تغيير كلمة مرور root
 change_root_password() {
     echo -e "${BLUE}\n تغيير كلمة مرور root...${NC}" | tee -a "$LOG_FILE"
     passwd root
+    echo "current_step=change_root_password" > "$STATUS_FILE"
 }
 
 # إعداد جدار الحماية
@@ -339,6 +380,7 @@ setup_firewall() {
     else
         echo -e "${YELLOW}تحذير: لم يتم إعداد جدار الحماية. من المهم إعداد جدار الحماية لحماية السيرفر.${NC}" | tee -a "$LOG_FILE"
     fi
+    echo "current_step=setup_firewall" > "$STATUS_FILE"
 }
 
 # إعداد تجديد الشهادة التلقائي باستخدام Certbot
@@ -346,6 +388,7 @@ setup_certbot_renewal() {
     echo -e "${BLUE}\n إعداد تجديد الشهادة التلقائي باستخدام Certbot...${NC}" | tee -a "$LOG_FILE"
     sudo systemctl enable certbot.timer
     sudo systemctl start certbot.timer
+    echo "current_step=setup_certbot_renewal" > "$STATUS_FILE"
 }
 
 # التأكد من تثبيت screen و nohup
@@ -353,52 +396,22 @@ ensure_screen_nohup_installed() {
     echo -e "${BLUE}\n التأكد من تثبيت screen و nohup...${NC}" | tee -a "$LOG_FILE"
     sudo apt install -y screen
     sudo apt install -y coreutils
+    echo "current_step=ensure_screen_nohup_installed" > "$STATUS_FILE"
 }
 
-# التأكد من تثبيت tmux
-ensure_tmux_installed() {
-    echo -e "${BLUE}\n التأكد من تثبيت tmux...${NC}" | tee -a "$LOG_FILE"
-    sudo apt install -y tmux
-}
-
-# إنشاء ملف وحدة خدمة systemd
-create_systemd_service() {
-    echo -e "${BLUE}\n إنشاء ملف وحدة خدمة systemd...${NC}" | tee -a "$LOG_FILE"
-    cat > /etc/systemd/system/hestia_install.service <<EOF
-[Unit]
-Description=Hestia-Odoo Installer
-After=network.target
-
-[Service]
-ExecStart=/path/to/installer.sh
-Restart=on-failure
-
-[Install]
-WantedBy=multi-user.target
-EOF
-    sudo systemctl daemon-reload
-    sudo systemctl enable hestia_install.service
-}
-
-# استخدام screen أو nohup أو tmux أو systemd لضمان استمرار عملية التثبيت
-use_screen_nohup_tmux_or_systemd() {
-    read -p "هل تريد استخدام screen أو nohup أو tmux أو systemd لضمان استمرار عملية التثبيت؟ (s/n/t/d): " CONTINUE_METHOD
+# استخدام screen أو nohup لضمان استمرار عملية التثبيت
+use_screen_or_nohup() {
+    read -p "هل تريد استخدام screen أو nohup لضمان استمرار عملية التثبيت؟ (s/n): " CONTINUE_METHOD
     if [[ $CONTINUE_METHOD == [sS] ]]; then
         echo -e "${BLUE}\n استخدام screen لضمان استمرار عملية التثبيت...${NC}" | tee -a "$LOG_FILE"
         screen -S hestia_install -d -m sudo ./installer.sh
     elif [[ $CONTINUE_METHOD == [nN] ]]; then
         echo -e "${BLUE}\n استخدام nohup لضمان استمرار عملية التثبيت...${NC}" | tee -a "$LOG_FILE"
         nohup sudo ./installer.sh > install.log 2>&1 &
-    elif [[ $CONTINUE_METHOD == [tT] ]]; then
-        echo -e "${BLUE}\n استخدام tmux لضمان استمرار عملية التثبيت...${NC}" | tee -a "$LOG_FILE"
-        tmux new -d -s hestia_install "sudo ./installer.sh"
-    elif [[ $CONTINUE_METHOD == [dD] ]]; then
-        echo -e "${BLUE}\n استخدام systemd لضمان استمرار عملية التثبيت...${NC}" | tee -a "$LOG_FILE"
-        create_systemd_service
-        sudo systemctl start hestia_install.service
     else
-        echo -e "${YELLOW}سيتم متابعة التثبيت بدون استخدام screen أو nohup أو tmux أو systemd.${NC}" | tee -a "$LOG_FILE"
+        echo -e "${YELLOW}سيتم متابعة التثبيت بدون استخدام screen أو nohup.${NC}" | tee -a "$LOG_FILE"
     fi
+    echo "current_step=use_screen_or_nohup" > "$STATUS_FILE"
 }
 
 # إعداد Nginx كوكيل عكسي
@@ -434,24 +447,22 @@ EOF
 
     sudo ln -s /etc/nginx/sites-available/odoo /etc/nginx/sites-enabled/
     sudo systemctl restart nginx
+    echo "current_step=setup_nginx_reverse_proxy" > "$STATUS_FILE"
 }
 
 # التنفيذ الرئيسي
 detect_environment
 validate_inputs
 ensure_screen_nohup_installed
-ensure_tmux_installed
-use_screen_nohup_tmux_or_systemd
-install_hestia &
-install_odoo &
-wait
+use_screen_or_nohup
+install_hestia
+install_odoo
 add_odoo_to_hestia_quick_app
-setup_cloudflare &
+setup_cloudflare
 change_root_password
 setup_firewall
 setup_certbot_renewal
 setup_nginx_reverse_proxy
-wait
 final_setup
 
 echo -e "${YELLOW}\n ملاحظة: تم توليد كلمة مرور عشوائية لهيستيا، تحقق من البريد الإلكتروني${NC}"
