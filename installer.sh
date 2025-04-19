@@ -16,10 +16,6 @@ LOG_FILE="$LOG_DIR/install.log"
 mkdir -p "$LOG_DIR"
 chmod 755 "$LOG_DIR"
 
-# إعدادات الحالة
-STATUS_FILE="/var/log/hestia_installer/status.txt"
-touch "$STATUS_FILE"
-
 # واجهة المستخدم
 clear
 echo -e "${GREEN}"
@@ -30,36 +26,6 @@ cat << "EOF"
 /_/ /_/\____/_/ /___ /_/   \____/_/     
 EOF
 echo -e "${NC}"
-
-# التحقق من حالة التثبيت السابقة
-if [ -f "$STATUS_FILE" ]; then
-    source "$STATUS_FILE"
-    if [ -n "$current_step" ]; then
-        echo -e "${YELLOW}تم اكتشاف عملية تثبيت سابقة. الخطوة الحالية: $current_step${NC}"
-        echo "1) متابعة من الخطوة الأخيرة"
-        echo "2) إعادة التثبيت من البداية"
-        echo "3) إلغاء التثبيت السابق"
-        read -p "اختر خيارًا (1/2/3): " USER_CHOICE
-        case $USER_CHOICE in
-            1)
-                echo -e "${GREEN}متابعة التثبيت...${NC}"
-                ;;
-            2)
-                echo -e "${GREEN}إعادة التثبيت من البداية...${NC}"
-                current_step=""
-                ;;
-            3)
-                echo -e "${GREEN}إلغاء التثبيت السابق...${NC}"
-                # أضف هنا منطق إلغاء التثبيت إذا لزم الأمر
-                current_step=""
-                ;;
-            *)
-                echo -e "${RED}خيار غير صالح. الخروج...${NC}"
-                exit 1
-                ;;
-        esac
-    fi
-fi
 
 # Fetch the public IP using curl
 SERVER_IP=$(curl -s ifconfig.me)
@@ -170,7 +136,6 @@ install_hestia() {
         --clamav yes \
         --spamassassin yes \
         --fail2ban yes
-    echo "current_step=install_hestia" > "$STATUS_FILE"
 }
 
 # تثبيت Odoo
@@ -201,7 +166,6 @@ EOF
 
     systemctl daemon-reload
     systemctl enable --now odoo
-    echo "current_step=install_odoo" > "$STATUS_FILE"
 }
 
 # إعداد Cloudflare
@@ -273,7 +237,6 @@ setup_cloudflare() {
             exit 1
         fi
     done
-    echo "current_step=setup_cloudflare" > "$STATUS_FILE"
 }
 
 # إضافة Odoo إلى قائمة التطبيقات السريعة في هيستيا
@@ -310,7 +273,6 @@ server {
 EOF
 
     echo -e "${GREEN}تمت الإضافة بنجاح!${NC}" | tee -a "$LOG_FILE"
-    echo "current_step=add_odoo_to_hestia_quick_app" > "$STATUS_FILE"
 }
 
 # الإعداد النهائي
@@ -319,7 +281,6 @@ final_setup() {
     echo -e "لوحة التحكم: https://panel.${DOMAIN}:${HESTIA_PORT}"
     echo -e "منفذ Odoo: ${ODOO_PORT}"
     echo -e "تم التثبيت بنجاح!${NC}"
-    echo "current_step=final_setup" > "$STATUS_FILE"
 }
 
 # اكتشاف البيئة وتطبيق أفضل الإعدادات
@@ -359,14 +320,12 @@ detect_environment() {
         echo -e "${RED}التوزيعة غير مدعومة${NC}" | tee -a "$LOG_FILE"
         exit 1
     fi
-    echo "current_step=detect_environment" > "$STATUS_FILE"
 }
 
 # تغيير كلمة مرور root
 change_root_password() {
     echo -e "${BLUE}\n تغيير كلمة مرور root...${NC}" | tee -a "$LOG_FILE"
     passwd root
-    echo "current_step=change_root_password" > "$STATUS_FILE"
 }
 
 # إعداد جدار الحماية
@@ -380,7 +339,6 @@ setup_firewall() {
     else
         echo -e "${YELLOW}تحذير: لم يتم إعداد جدار الحماية. من المهم إعداد جدار الحماية لحماية السيرفر.${NC}" | tee -a "$LOG_FILE"
     fi
-    echo "current_step=setup_firewall" > "$STATUS_FILE"
 }
 
 # إعداد تجديد الشهادة التلقائي باستخدام Certbot
@@ -388,7 +346,6 @@ setup_certbot_renewal() {
     echo -e "${BLUE}\n إعداد تجديد الشهادة التلقائي باستخدام Certbot...${NC}" | tee -a "$LOG_FILE"
     sudo systemctl enable certbot.timer
     sudo systemctl start certbot.timer
-    echo "current_step=setup_certbot_renewal" > "$STATUS_FILE"
 }
 
 # التأكد من تثبيت screen و nohup
@@ -396,7 +353,6 @@ ensure_screen_nohup_installed() {
     echo -e "${BLUE}\n التأكد من تثبيت screen و nohup...${NC}" | tee -a "$LOG_FILE"
     sudo apt install -y screen
     sudo apt install -y coreutils
-    echo "current_step=ensure_screen_nohup_installed" > "$STATUS_FILE"
 }
 
 # استخدام screen أو nohup لضمان استمرار عملية التثبيت
@@ -411,7 +367,6 @@ use_screen_or_nohup() {
     else
         echo -e "${YELLOW}سيتم متابعة التثبيت بدون استخدام screen أو nohup.${NC}" | tee -a "$LOG_FILE"
     fi
-    echo "current_step=use_screen_or_nohup" > "$STATUS_FILE"
 }
 
 # إعداد Nginx كوكيل عكسي
@@ -447,7 +402,165 @@ EOF
 
     sudo ln -s /etc/nginx/sites-available/odoo /etc/nginx/sites-enabled/
     sudo systemctl restart nginx
-    echo "current_step=setup_nginx_reverse_proxy" > "$STATUS_FILE"
+}
+
+# إعداد Docker و Docker Compose
+setup_docker() {
+    echo -e "${BLUE}\n إعداد Docker و Docker Compose...${NC}" | tee -a "$LOG_FILE"
+    if ! command -v docker &> /dev/null; then
+        echo "جارٍ تثبيت Docker..."
+        curl -fsSL https://get.docker.com | sudo sh
+        sudo usermod -aG docker $USER
+    fi
+
+    if ! command -v docker-compose &> /dev/null; then
+        echo "جارٍ تثبيت Docker Compose..."
+        sudo curl -L "https://github.com/docker/compose/releases/download/v2.20.0/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+        sudo chmod +x /usr/local/bin/docker-compose
+    fi
+}
+
+# إعداد Docker Compose لـ Odoo و PostgreSQL
+setup_docker_compose() {
+    echo -e "${BLUE}\n إعداد Docker Compose لـ Odoo و PostgreSQL...${NC}" | tee -a "$LOG_FILE"
+    DOMAIN=$1
+    USER=$2
+
+    APP_NAME="odoo_${DOMAIN//./_}"
+    ODDO_DIR="/home/$USER/web/$DOMAIN"
+    DB_NAME="${USER}_${DOMAIN//./_}"
+    DB_USER="${USER}_odoo"
+    DB_PASSWORD=$(openssl rand -base64 12)
+    PORT=$(shuf -i 8000-9000 -n 1)
+    SSL_EMAIL="admin@$DOMAIN"
+
+    mkdir -p $ODDO_DIR/{public_html,addons,config}
+    chown -R $USER:$USER $ODDO_DIR
+
+    if ! /usr/local/hestia/bin/v-add-database "$USER" "$DB_NAME" "$DB_USER" "$DB_PASSWORD"; then
+        echo "فشل إنشاء قاعدة البيانات. يتم التراجع..."
+        exit 1
+    fi
+
+    cat > $ODDO_DIR/docker-compose.yml <<EOL
+version: '3'
+services:
+  odoo:
+    image: odoo:latest
+    container_name: $APP_NAME
+    restart: unless-stopped
+    ports:
+      - "$PORT:8069"
+    volumes:
+      - $ODDO_DIR/addons:/mnt/extra-addons
+      - $ODDO_DIR/config:/etc/odoo
+    environment:
+      - HOST=postgres
+      - USER=$DB_USER
+      - PASSWORD=$DB_PASSWORD
+      - DB_NAME=$DB_NAME
+    depends_on:
+      - postgres
+
+  postgres:
+    image: postgres:13
+    container_name: ${APP_NAME}_db
+    restart: unless-stopped
+    environment:
+      - POSTGRES_USER=$DB_USER
+      - POSTGRES_PASSWORD=$DB_PASSWORD
+      - POSTGRES_DB=$DB_NAME
+    volumes:
+      - $ODDO_DIR/postgres:/var/lib/postgresql/data
+EOL
+
+    sudo -u $USER docker-compose -f $ODDO_DIR/docker-compose.yml up -d || {
+        echo "فشل تشغيل الحاويات. يتم التراجع..."
+        /usr/local/hestia/bin/v-delete-database "$USER" "$DB_NAME"
+        exit 1
+    }
+
+    cat > /etc/nginx/sites-available/$DOMAIN <<EOL
+server {
+    listen 80;
+    server_name $DOMAIN;
+    
+    return 301 https://\$host\$request_uri;
+}
+
+server {
+    listen 443 ssl;
+    server_name $DOMAIN;
+
+    ssl_certificate /etc/letsencrypt/live/$DOMAIN/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/$DOMAIN/privkey.pem;
+
+    location / {
+        proxy_pass http://localhost:$PORT;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+    }
+
+    add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
+    add_header X-Content-Type-Options nosniff;
+    add_header X-Frame-Options "SAMEORIGIN";
+}
+EOL
+
+    ln -s /etc/nginx/sites-available/$DOMAIN /etc/nginx/sites-enabled/
+    systemctl reload nginx
+
+    if ! certbot --nginx -d $DOMAIN --non-interactive --agree-tos -m $SSL_EMAIL; then
+        echo "فشل إصدار شهادة SSL. يتم الاستمرار بدون SSL..."
+        rm /etc/nginx/sites-enabled/$DOMAIN
+        cp $ODDO_DIR/nginx-backup.conf /etc/nginx/sites-available/$DOMAIN
+        ln -s /etc/nginx/sites-available/$DOMAIN /etc/nginx/sites-enabled/
+        systemctl reload nginx
+    fi
+
+    cat > /usr/local/bin/backup-$APP_NAME <<EOL
+#!/bin/bash
+tar -czf $ODDO_DIR/backup-\$(date +%F).tar.gz $ODDO_DIR/postgres $ODDO_DIR/addons
+docker exec ${APP_NAME}_db pg_dump -U $DB_USER $DB_NAME > $ODDO_DIR/db-backup-\$(date +%F).sql
+EOL
+
+    chmod +x /usr/local/bin/backup-$APP_NAME
+    echo "0 3 * * * root /usr/local/bin/backup-$APP_NAME" | sudo tee -a /etc/crontab
+
+    cat > /etc/fail2ban/jail.d/$APP_NAME.conf <<EOL
+[$APP_NAME]
+enabled = true
+port = $PORT
+filter = odoo
+logpath = $ODDO_DIR/config/odoo-server.log
+maxretry = 3
+bantime = 1h
+EOL
+
+    systemctl restart fail2ban
+
+    cat > $ODDO_DIR/installation-info.txt <<EOL
+تم تثبيت Odoo بنجاح!
+
+تفاصيل الوصول:
+- العنوان: https://$DOMAIN
+- اسم المستخدم (افتراضي): admin
+- كلمة المرور (افتراضي): admin
+- منفذ الحاوية: $PORT
+- بيانات قاعدة البيانات:
+  - المضيف: localhost
+  - الاسم: $DB_NAME
+  - المستخدم: $DB_USER
+  - كلمة المرور: $DB_PASSWORD
+
+نسخة احتياطية تلقائية يومية الساعة 3 صباحًا.
+EOL
+
+    chown $USER:$USER $ODDO_DIR/installation-info.txt
+
+    echo "تم الانتهاء من التثبيت! تفاصيل التثبيت في: $ODDO_DIR/installation-info.txt"
 }
 
 # التنفيذ الرئيسي
@@ -455,14 +568,18 @@ detect_environment
 validate_inputs
 ensure_screen_nohup_installed
 use_screen_or_nohup
-install_hestia
-install_odoo
+install_hestia &
+install_odoo &
+wait
 add_odoo_to_hestia_quick_app
-setup_cloudflare
+setup_cloudflare &
 change_root_password
 setup_firewall
 setup_certbot_renewal
 setup_nginx_reverse_proxy
+setup_docker
+setup_docker_compose $DOMAIN $USER
+wait
 final_setup
 
 echo -e "${YELLOW}\n ملاحظة: تم توليد كلمة مرور عشوائية لهيستيا، تحقق من البريد الإلكتروني${NC}"

@@ -150,174 +150,6 @@ if [[ -n "$CF_ZONE" && ! "$CF_ZONE" =~ ^[a-zA-Z0-9]{32}$ ]]; then
 fi
 ```
 
-### 10. إعداد تدوير ملفات السجل باستخدام logrotate:
-```bash
-# إنشاء ملف تكوين logrotate
-sudo nano /etc/logrotate.d/hestia_installer
-
-# أضف التكوين التالي:
-/var/log/hestia_installer/install.log {
-    daily
-    rotate 7
-    compress
-    missingok
-    notifempty
-    create 0644 root root
-    postrotate
-        systemctl reload hestia_installer
-    endscript
-}
-
-# التحقق من حالة خدمة logrotate
-sudo systemctl status logrotate
-sudo systemctl enable logrotate
-```
-
-### 11. التعامل مع انقطاعات السكربت:
-```bash
-# إنشاء ملف السجل
-mkdir -p /var/log/hestia_installer
-chmod 755 /var/log/hestia_installer
-
-# إنشاء ملف الحالة
-touch /var/log/hestia_installer/status.txt
-
-# التحقق من وجود ملف الحالة في بداية السكربت
-if [ -f "/var/log/hestia_installer/status.txt" ]; then
-    source "/var/log/hestia_installer/status.txt"
-    if [ -n "$current_step" ]; then
-        echo "تم اكتشاف عملية تثبيت سابقة. الخطوة الحالية: $current_step"
-        echo "1) متابعة من الخطوة الأخيرة"
-        echo "2) إعادة التثبيت من البداية"
-        echo "3) إلغاء التثبيت السابق"
-        read -p "اختر خيارًا (1/2/3): " USER_CHOICE
-        case $USER_CHOICE in
-            1)
-                echo "متابعة التثبيت..."
-                ;;
-            2)
-                echo "إعادة التثبيت من البداية..."
-                current_step=""
-                ;;
-            3)
-                echo "إلغاء التثبيت السابق..."
-                current_step=""
-                ;;
-            *)
-                echo "خيار غير صالح. الخروج..."
-                exit 1
-                ;;
-        esac
-    fi
-fi
-
-# تحديث ملف الحالة في كل خطوة من السكربت
-echo "current_step=install_hestia" > /var/log/hestia_installer/status.txt
-echo "current_step=install_odoo" > /var/log/hestia_installer/status.txt
-echo "current_step=setup_cloudflare" > /var/log/hestia_installer/status.txt
-echo "current_step=add_odoo_to_hestia_quick_app" > /var/log/hestia_installer/status.txt
-echo "current_step=final_setup" > /var/log/hestia_installer/status.txt
-```
-
-### 12. استخدام ملفات الحالة لتتبع التقدم:
-```bash
-# إنشاء ملف الحالة
-touch /var/log/hestia_installer/status.txt
-
-# تحديث ملف الحالة في كل خطوة من السكربت
-echo "current_step=install_hestia" > /var/log/hestia_installer/status.txt
-echo "current_step=install_odoo" > /var/log/hestia_installer/status.txt
-echo "current_step=setup_cloudflare" > /var/log/hestia_installer/status.txt
-echo "current_step=add_odoo_to_hestia_quick_app" > /var/log/hestia_installer/status.txt
-echo "current_step=final_setup" > /var/log/hestia_installer/status.txt
-
-# التحقق من ملف الحالة في بداية السكربت
-if [ -f "/var/log/hestia_installer/status.txt" ]; then
-    source "/var/log/hestia_installer/status.txt"
-    if [ -n "$current_step" ]; then
-        echo "تم اكتشاف عملية تثبيت سابقة. الخطوة الحالية: $current_step"
-        echo "1) متابعة من الخطوة الأخيرة"
-        echo "2) إعادة التثبيت من البداية"
-        echo "3) إلغاء التثبيت السابق"
-        read -p "اختر خيارًا (1/2/3): " USER_CHOICE
-        case $USER_CHOICE in
-            1)
-                echo "متابعة التثبيت..."
-                ;;
-            2)
-                echo "إعادة التثبيت من البداية..."
-                current_step=""
-                ;;
-            3)
-                echo "إلغاء التثبيت السابق..."
-                current_step=""
-                ;;
-            *)
-                echo "خيار غير صالح. الخروج..."
-                exit 1
-                ;;
-        esac
-    fi
-fi
-```
-
-### 13. استخدام المتغيرات البيئية لتتبع التقدم:
-```bash
-# تحديث المتغيرات البيئية في كل خطوة من السكربت
-export CURRENT_STEP=install_hestia
-export CURRENT_STEP=install_odoo
-export CURRENT_STEP=setup_cloudflare
-export CURRENT_STEP=add_odoo_to_hestia_quick_app
-export CURRENT_STEP=final_setup
-
-# التحقق من المتغيرات البيئية في بداية السكربت
-if [ -n "$CURRENT_STEP" ]; then
-    echo "تم اكتشاف عملية تثبيت سابقة. الخطوة الحالية: $CURRENT_STEP"
-    echo "1) متابعة من الخطوة الأخيرة"
-    echo "2) إعادة التثبيت من البداية"
-    echo "3) إلغاء التثبيت السابق"
-    read -p "اختر خيارًا (1/2/3): " USER_CHOICE
-    case $USER_CHOICE in
-        1)
-            echo "متابعة التثبيت..."
-            ;;
-        2)
-            echo "إعادة التثبيت من البداية..."
-            export CURRENT_STEP=""
-            ;;
-        3)
-            echo "إلغاء التثبيت السابق..."
-            export CURRENT_STEP=""
-            ;;
-        *)
-            echo "خيار غير صالح. الخروج..."
-            exit 1
-            ;;
-    esac
-fi
-```
-
-### 14. اختبار سلوك السكربت في بيئات مختلفة:
-```bash
-# استخدام الأجهزة الافتراضية
-# إعداد الأجهزة الافتراضية بأنظمة تشغيل وتوزيعات مختلفة لاختبار السكربت
-
-# استخدام خدمات السحابة
-# استخدام خدمات السحابة مثل AWS و Google Cloud و Azure لإنشاء مثيلات بأنظمة تشغيل وتوزيعات مختلفة
-
-# استخدام Docker
-# إنشاء حاويات Docker ببيئات أساسية مختلفة لاختبار السكربت
-
-# التحقق من وجود ملفات السجل والحالة في كل بيئة
-# التحقق من وجود ملفات السجل والحالة وتحديثها بشكل صحيح في كل بيئة
-
-# اختبار انقطاعات السكربت
-# محاكاة انقطاعات في تنفيذ السكربت والتحقق من استئناف السكربت بشكل صحيح من الخطوة الأخيرة
-
-# التحقق من صحة الإدخالات
-# التحقق من صحة الإدخالات في كل بيئة لضمان توافقها مع السكربت
-```
-
 ### إذا واجهتك أي مشاكل، جرب هذه الحلول:
 
 #### أ. مشكلة في تبعيات Python:
@@ -350,7 +182,7 @@ sudo ./installer.sh --install
 tail -n 50 install.log
 ```
 
-### 15. خطوات التثبيت على بيئة أوبنتو:
+### 10. خطوات التثبيت على بيئة أوبنتو:
 ```bash
 # تحديث النظام الأساسي
 sudo apt update && sudo apt full-upgrade -y
@@ -410,7 +242,7 @@ code --install-extension GitHub.copilot
 # اتبع التعليمات التي تظهر على الشاشة
 ```
 
-### 16. تثبيت إصدارات PHP 8.2, 8.3, و 8.4:
+### 11. تثبيت إصدارات PHP 8.2, 8.3, و 8.4:
 ```bash
 # إضافة مستودع Ondrej Sury
 sudo add-apt-repository ppa:ondrej/php
@@ -425,7 +257,7 @@ php8.3 -v
 php8.4 -v
 ```
 
-### 17. استخدام `screen` أو `nohup` لضمان استمرار عملية التثبيت حتى إذا تم إغلاق التيرمينال:
+### 12. استخدام `screen` أو `nohup` لضمان استمرار عملية التثبيت حتى إذا تم إغلاق التيرمينال:
 ```bash
 # استخدام `screen`
 sudo apt install screen -y
@@ -441,13 +273,13 @@ nohup sudo ./installer.sh > install.log 2>&1 &
 tail -f install.log
 ```
 
-### 18. إعداد خدمة البريد الإلكتروني في هيستيا:
+### 13. إعداد خدمة البريد الإلكتروني في هيستيا:
 ```bash
 # تثبيت HestiaCP يتضمن خدمات البريد الإلكتروني مثل Exim و Dovecot
 # لا حاجة لإجراء إضافي
 ```
 
-### 19. التعامل مع الأخطاء في `installer.sh`:
+### 14. التعامل مع الأخطاء في `installer.sh`:
 ```bash
 # استخدام `set -e` في بداية السكربت لضمان خروج السكربت فورًا إذا فشل أي أمر
 set -e
@@ -464,7 +296,7 @@ fi
 # تجنب تسجيل المعلومات الحساسة مثل كلمات المرور ومفاتيح API
 ```
 
-### 20. إعداد وكيل عكسي مع SSL:
+### 15. إعداد وكيل عكسي مع SSL:
 ```bash
 # تثبيت Nginx
 sudo apt install -y nginx
@@ -500,7 +332,7 @@ sudo ln -s /etc/nginx/sites-available/odoo /etc/nginx/sites-enabled/
 sudo systemctl restart nginx
 ```
 
-### 21. اكتشاف البيئة وتطبيق أفضل الإعدادات:
+### 16. اكتشاف البيئة وتطبيق أفضل الإعدادات:
 ```bash
 # اكتشاف نظام التشغيل
 OS=$(uname -s)
@@ -536,4 +368,164 @@ else
     echo "التوزيعة غير مدعومة"
     exit 1
 fi
+```
+
+### 17. إعداد Docker و Docker Compose:
+```bash
+# تثبيت Docker
+if ! command -v docker &> /dev/null; then
+    echo "جارٍ تثبيت Docker..."
+    curl -fsSL https://get.docker.com | sudo sh
+    sudo usermod -aG docker $USER
+fi
+
+# تثبيت Docker Compose
+if ! command -v docker-compose &> /dev/null; then
+    echo "جارٍ تثبيت Docker Compose..."
+    sudo curl -L "https://github.com/docker/compose/releases/download/v2.20.0/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+    sudo chmod +x /usr/local/bin/docker-compose
+fi
+```
+
+### 18. إعداد Docker Compose لـ Odoo و PostgreSQL:
+```bash
+# إعداد Docker Compose لـ Odoo و PostgreSQL
+DOMAIN=$1
+USER=$2
+
+APP_NAME="odoo_${DOMAIN//./_}"
+ODDO_DIR="/home/$USER/web/$DOMAIN"
+DB_NAME="${USER}_${DOMAIN//./_}"
+DB_USER="${USER}_odoo"
+DB_PASSWORD=$(openssl rand -base64 12)
+PORT=$(shuf -i 8000-9000 -n 1)
+SSL_EMAIL="admin@$DOMAIN"
+
+mkdir -p $ODDO_DIR/{public_html,addons,config}
+chown -R $USER:$USER $ODDO_DIR
+
+if ! /usr/local/hestia/bin/v-add-database "$USER" "$DB_NAME" "$DB_USER" "$DB_PASSWORD"; then
+    echo "فشل إنشاء قاعدة البيانات. يتم التراجع..."
+    exit 1
+fi
+
+cat > $ODDO_DIR/docker-compose.yml <<EOL
+version: '3'
+services:
+  odoo:
+    image: odoo:latest
+    container_name: $APP_NAME
+    restart: unless-stopped
+    ports:
+      - "$PORT:8069"
+    volumes:
+      - $ODDO_DIR/addons:/mnt/extra-addons
+      - $ODDO_DIR/config:/etc/odoo
+    environment:
+      - HOST=postgres
+      - USER=$DB_USER
+      - PASSWORD=$DB_PASSWORD
+      - DB_NAME=$DB_NAME
+    depends_on:
+      - postgres
+
+  postgres:
+    image: postgres:13
+    container_name: ${APP_NAME}_db
+    restart: unless-stopped
+    environment:
+      - POSTGRES_USER=$DB_USER
+      - POSTGRES_PASSWORD=$DB_PASSWORD
+      - POSTGRES_DB=$DB_NAME
+    volumes:
+      - $ODDO_DIR/postgres:/var/lib/postgresql/data
+EOL
+
+sudo -u $USER docker-compose -f $ODDO_DIR/docker-compose.yml up -d || {
+    echo "فشل تشغيل الحاويات. يتم التراجع..."
+    /usr/local/hestia/bin/v-delete-database "$USER" "$DB_NAME"
+    exit 1
+}
+
+cat > /etc/nginx/sites-available/$DOMAIN <<EOL
+server {
+    listen 80;
+    server_name $DOMAIN;
+    
+    return 301 https://\$host\$request_uri;
+}
+
+server {
+    listen 443 ssl;
+    server_name $DOMAIN;
+
+    ssl_certificate /etc/letsencrypt/live/$DOMAIN/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/$DOMAIN/privkey.pem;
+
+    location / {
+        proxy_pass http://localhost:$PORT;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+    }
+
+    add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
+    add_header X-Content-Type-Options nosniff;
+    add_header X-Frame-Options "SAMEORIGIN";
+}
+EOL
+
+ln -s /etc/nginx/sites-available/$DOMAIN /etc/nginx/sites-enabled/
+systemctl reload nginx
+
+if ! certbot --nginx -d $DOMAIN --non-interactive --agree-tos -m $SSL_EMAIL; then
+    echo "فشل إصدار شهادة SSL. يتم الاستمرار بدون SSL..."
+    rm /etc/nginx/sites-enabled/$DOMAIN
+    cp $ODDO_DIR/nginx-backup.conf /etc/nginx/sites-available/$DOMAIN
+    ln -s /etc/nginx/sites-available/$DOMAIN /etc/nginx/sites-enabled/
+    systemctl reload nginx
+fi
+
+cat > /usr/local/bin/backup-$APP_NAME <<EOL
+#!/bin/bash
+tar -czf $ODDO_DIR/backup-\$(date +%F).tar.gz $ODDO_DIR/postgres $ODDO_DIR/addons
+docker exec ${APP_NAME}_db pg_dump -U $DB_USER $DB_NAME > $ODDO_DIR/db-backup-\$(date +%F).sql
+EOL
+
+chmod +x /usr/local/bin/backup-$APP_NAME
+echo "0 3 * * * root /usr/local/bin/backup-$APP_NAME" | sudo tee -a /etc/crontab
+
+cat > /etc/fail2ban/jail.d/$APP_NAME.conf <<EOL
+[$APP_NAME]
+enabled = true
+port = $PORT
+filter = odoo
+logpath = $ODDO_DIR/config/odoo-server.log
+maxretry = 3
+bantime = 1h
+EOL
+
+systemctl restart fail2ban
+
+cat > $ODDO_DIR/installation-info.txt <<EOL
+تم تثبيت Odoo بنجاح!
+
+تفاصيل الوصول:
+- العنوان: https://$DOMAIN
+- اسم المستخدم (افتراضي): admin
+- كلمة المرور (افتراضي): admin
+- منفذ الحاوية: $PORT
+- بيانات قاعدة البيانات:
+  - المضيف: localhost
+  - الاسم: $DB_NAME
+  - المستخدم: $DB_USER
+  - كلمة المرور: $DB_PASSWORD
+
+نسخة احتياطية تلقائية يومية الساعة 3 صباحًا.
+EOL
+
+chown $USER:$USER $ODDO_DIR/installation-info.txt
+
+echo "تم الانتهاء من التثبيت! تفاصيل التثبيت في: $ODDO_DIR/installation-info.txt"
 ```
