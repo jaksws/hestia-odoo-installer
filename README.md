@@ -558,3 +558,45 @@ systemctl status nginx postgresql docker
 tail -50 /var/log/nginx/error.log
 docker logs \$(docker ps -aqf "name=odoo")
 ```
+
+### 21. تنظيف التبعيات:
+```bash
+# تنظيف التبعيات
+sudo apt purge -y nginx postgresql mariadb-server exim4 dovecot-core fail2ban vsftpd rspamd
+sudo apt autoremove -y && sudo apt clean
+```
+
+### 22. إصلاح Nginx وCertbot:
+```bash
+# إصلاح Nginx وCertbot
+sudo apt install -y python3-certbot-nginx
+sudo mkdir -p /etc/nginx/sites-{available,enabled}
+sudo tee /etc/nginx/nginx.conf <<EOF
+user www-data;
+worker_processes auto;
+pid /run/nginx.pid;
+events { worker_connections 768; }
+http {
+  sendfile on; tcp_nopush on; types_hash_max_size 2048;
+  include /etc/nginx/mime.types; default_type application/octet-stream;
+  access_log /var/log/nginx/access.log; error_log /var/log/nginx/error.log;
+  include /etc/nginx/conf.d/*.conf;
+  include /etc/nginx/sites-enabled/*;
+}
+EOF
+sudo nginx -t && sudo systemctl restart nginx
+```
+
+### 23. التحقق النهائي:
+```bash
+# التحقق النهائي
+sudo systemctl list-units --type=service | grep -E 'nginx|postgres|odoo'
+ls -l /usr/local/hestia/bin/ /opt/odoo/ /etc/nginx/
+ls -ld /home/*/web/*
+```
+
+### 24. إعادة تشغيل نهائية:
+```bash
+# إعادة تشغيل نهائية
+sudo reboot
+```
