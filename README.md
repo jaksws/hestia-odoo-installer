@@ -273,13 +273,46 @@ nohup sudo ./installer.sh > install.log 2>&1 &
 tail -f install.log
 ```
 
-### 13. إعداد خدمة البريد الإلكتروني في هيستيا:
+### 13. استخدام `tmux` لضمان استمرار عملية التثبيت حتى إذا تم إغلاق التيرمينال:
+```bash
+# استخدام `tmux`
+sudo apt install tmux -y
+tmux new -s hestia_install
+sudo ./installer.sh
+# اضغط `Ctrl+B` ثم `D` للانفصال عن الجلسة.
+# أعِد الاتصال لاحقًا بـ:
+tmux attach -t hestia_install
+```
+
+### 14. استخدام `systemd` لضمان استمرار عملية التثبيت حتى إذا تم إغلاق التيرمينال:
+```bash
+# إنشاء ملف وحدة خدمة systemd
+sudo nano /etc/systemd/system/hestia_install.service
+# أضف التكوين التالي:
+[Unit]
+Description=Hestia-Odoo Installer
+After=network.target
+
+[Service]
+ExecStart=/path/to/installer.sh
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target
+
+# تفعيل الخدمة
+sudo systemctl daemon-reload
+sudo systemctl enable hestia_install.service
+sudo systemctl start hestia_install.service
+```
+
+### 15. إعداد خدمة البريد الإلكتروني في هيستيا:
 ```bash
 # تثبيت HestiaCP يتضمن خدمات البريد الإلكتروني مثل Exim و Dovecot
 # لا حاجة لإجراء إضافي
 ```
 
-### 14. التعامل مع الأخطاء في `installer.sh`:
+### 16. التعامل مع الأخطاء في `installer.sh`:
 ```bash
 # استخدام `set -e` في بداية السكربت لضمان خروج السكربت فورًا إذا فشل أي أمر
 set -e
@@ -296,7 +329,7 @@ fi
 # تجنب تسجيل المعلومات الحساسة مثل كلمات المرور ومفاتيح API
 ```
 
-### 15. إعداد وكيل عكسي مع SSL:
+### 17. إعداد وكيل عكسي مع SSL:
 ```bash
 # تثبيت Nginx
 sudo apt install -y nginx
@@ -332,7 +365,7 @@ sudo ln -s /etc/nginx/sites-available/odoo /etc/nginx/sites-enabled/
 sudo systemctl restart nginx
 ```
 
-### 16. اكتشاف البيئة وتطبيق أفضل الإعدادات:
+### 18. اكتشاف البيئة وتطبيق أفضل الإعدادات:
 ```bash
 # اكتشاف نظام التشغيل
 OS=$(uname -s)

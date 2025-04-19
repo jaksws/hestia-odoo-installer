@@ -355,17 +355,49 @@ ensure_screen_nohup_installed() {
     sudo apt install -y coreutils
 }
 
-# استخدام screen أو nohup لضمان استمرار عملية التثبيت
-use_screen_or_nohup() {
-    read -p "هل تريد استخدام screen أو nohup لضمان استمرار عملية التثبيت؟ (s/n): " CONTINUE_METHOD
+# التأكد من تثبيت tmux
+ensure_tmux_installed() {
+    echo -e "${BLUE}\n التأكد من تثبيت tmux...${NC}" | tee -a "$LOG_FILE"
+    sudo apt install -y tmux
+}
+
+# إنشاء ملف وحدة خدمة systemd
+create_systemd_service() {
+    echo -e "${BLUE}\n إنشاء ملف وحدة خدمة systemd...${NC}" | tee -a "$LOG_FILE"
+    cat > /etc/systemd/system/hestia_install.service <<EOF
+[Unit]
+Description=Hestia-Odoo Installer
+After=network.target
+
+[Service]
+ExecStart=/path/to/installer.sh
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target
+EOF
+    sudo systemctl daemon-reload
+    sudo systemctl enable hestia_install.service
+}
+
+# استخدام screen أو nohup أو tmux أو systemd لضمان استمرار عملية التثبيت
+use_screen_nohup_tmux_or_systemd() {
+    read -p "هل تريد استخدام screen أو nohup أو tmux أو systemd لضمان استمرار عملية التثبيت؟ (s/n/t/d): " CONTINUE_METHOD
     if [[ $CONTINUE_METHOD == [sS] ]]; then
         echo -e "${BLUE}\n استخدام screen لضمان استمرار عملية التثبيت...${NC}" | tee -a "$LOG_FILE"
         screen -S hestia_install -d -m sudo ./installer.sh
     elif [[ $CONTINUE_METHOD == [nN] ]]; then
         echo -e "${BLUE}\n استخدام nohup لضمان استمرار عملية التثبيت...${NC}" | tee -a "$LOG_FILE"
         nohup sudo ./installer.sh > install.log 2>&1 &
+    elif [[ $CONTINUE_METHOD == [tT] ]]; then
+        echo -e "${BLUE}\n استخدام tmux لضمان استمرار عملية التثبيت...${NC}" | tee -a "$LOG_FILE"
+        tmux new -d -s hestia_install "sudo ./installer.sh"
+    elif [[ $CONTINUE_METHOD == [dD] ]]; then
+        echo -e "${BLUE}\n استخدام systemd لضمان استمرار عملية التثبيت...${NC}" | tee -a "$LOG_FILE"
+        create_systemd_service
+        sudo systemctl start hestia_install.service
     else
-        echo -e "${YELLOW}سيتم متابعة التثبيت بدون استخدام screen أو nohup.${NC}" | tee -a "$LOG_FILE"
+        echo -e "${YELLOW}سيتم متابعة التثبيت بدون استخدام screen أو nohup أو tmux أو systemd.${NC}" | tee -a "$LOG_FILE"
     fi
 }
 
@@ -408,7 +440,8 @@ EOF
 detect_environment
 validate_inputs
 ensure_screen_nohup_installed
-use_screen_or_nohup
+ensure_tmux_installed
+use_screen_nohup_tmux_or_systemd
 install_hestia &
 install_odoo &
 wait
