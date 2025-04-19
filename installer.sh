@@ -27,6 +27,10 @@ cat << "EOF"
 EOF
 echo -e "${NC}"
 
+# Uninstall HestiaCP if already installed
+sudo /usr/local/hestia/bin/v-uninstall --force
+sudo rm -rf /usr/local/hestia
+
 # طلب المدخلات
 read -p "أدخل اسم النطاق الرئيسي (مثال: jaksws.com): " DOMAIN
 SERVER_IP=$(curl -s ifconfig.me)
@@ -132,7 +136,7 @@ install_hestia() {
 install_odoo() {
     echo -e "${BLUE}\nجاري تثبيت Odoo...${NC}" | tee -a "$LOG_FILE"
     useradd -m -d /opt/odoo -U -r -s /bin/bash odoo
-    sudo -u odoo git clone -b ${ODOO_VERSION} --depth 1 https://github.com/odoo/odoo /opt/odoo/src
+    sudo -u odoo git clone https://github.com/odoo/odoo.git --depth 1 --branch $ODOO_VERSION --single-branch /opt/odoo/src
     
     sudo -u odoo python3 -m venv /opt/odoo/venv
     sudo -u odoo /opt/odoo/venv/bin/pip install -r /opt/odoo/src/requirements.txt
@@ -366,7 +370,8 @@ setup_nginx_reverse_proxy() {
     sudo systemctl start nginx
     sudo systemctl enable nginx
 
-    cat > /etc/nginx/sites-available/odoo <<EOF
+    sudo mkdir -p /etc/nginx/sites-{available,enabled}
+    sudo tee /etc/nginx/sites-available/odoo <<EOF
 server {
     listen 80;
     server_name ${DOMAIN};
@@ -391,7 +396,7 @@ server {
 EOF
 
     sudo ln -s /etc/nginx/sites-available/odoo /etc/nginx/sites-enabled/
-    sudo systemctl restart nginx
+    sudo nginx -t && sudo systemctl restart nginx
 }
 
 # التنفيذ الرئيسي
@@ -415,7 +420,7 @@ echo -e "${YELLOW}\n ملاحظة: تم توليد كلمة مرور عشوائ�
 install_dependencies() {
     echo -e "${BLUE}\nUpdating system and installing dependencies...${NC}" | tee -a "$LOG_FILE"
     sudo apt update && sudo apt full-upgrade -y
-    sudo apt install -y curl wget git unzip dialog ca-certificates jq python3-dev python3-pip python3-venv
+    sudo apt install -y curl wget git unzip dialog ca-certificates jq python3-dev python3-pip python3.10-venv
 }
 
 # Add a section to download and prepare the script
@@ -569,7 +574,7 @@ troubleshooting() {
         
         # Check logs
         tail -50 /var/log/nginx/error.log
-        docker logs \$(docker ps -aqf "name=odoo")
+        docker logs $(docker ps -aqf "name=odoo")
     }
 }
 
@@ -583,3 +588,9 @@ https_configuration_with_certbot
 docker_integration
 automatic_backup_system
 troubleshooting
+
+# Full reboot step
+sudo reboot
+
+# Re-execute the script after corrections
+sudo ./installer.sh --install 2>&1 | tee install.log
