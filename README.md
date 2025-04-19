@@ -132,19 +132,19 @@ if [[ -z "$ODOO_PORT" || ! "$ODOO_PORT" =~ ^[0-9]{1,5}$ || "$ODOO_PORT" -lt 1 ||
 fi
 
 # التحقق من صحة مفتاح API الخاص بـ Cloudflare
-if [[ -n "$CF_API" && ! "$CF_API" =~ ^[a-zA-Z0-9]{32}$ ]]; then
+if [[ -ن "$CF_API" && ! "$CF_API" =~ ^[a-zA-Z0-9]{32}$ ]]; then
     echo "مفتاح API الخاص بـ Cloudflare غير صالح."
     exit 1
 fi
 
 # التحقق من صحة البريد الإلكتروني الخاص بـ Cloudflare
-if [[ -n "$CF_EMAIL" && ! "$CF_EMAIL" =~ ^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$ ]]; then
+if [[ -ن "$CF_EMAIL" && ! "$CF_EMAIL" =~ ^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$ ]]; then
     echo "البريد الإلكتروني الخاص بـ Cloudflare غير صالح."
     exit 1
 fi
 
 # التحقق من صحة معرف المنطقة الخاص بـ Cloudflare
-if [[ -n "$CF_ZONE" && ! "$CF_ZONE" =~ ^[a-zA-Z0-9]{32}$ ]]; then
+if [[ -ن "$CF_ZONE" && ! "$CF_ZONE" =~ ^[a-zA-Z0-9]{32}$ ]]; then
     echo "معرف المنطقة الخاص بـ Cloudflare غير صالح."
     exit 1
 fi

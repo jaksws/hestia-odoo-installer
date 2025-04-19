@@ -3,6 +3,9 @@
 # Version: 2.0
 # Author: Jaksws Team
 
+set -e
+trap 'echo "An error occurred. Exiting..."; exit 1' ERR
+
 # ألوان ANSI
 RED='\033[0;91m'
 GREEN='\033[0;92m'
@@ -28,16 +31,19 @@ EOF
 echo -e "${NC}"
 
 # Uninstall HestiaCP if already installed
-sudo /usr/local/hestia/bin/v-uninstall --force
-sudo rm -rf /usr/local/hestia
+uninstall_hestia() {
+    echo -e "${BLUE}\nجاري إزالة HestiaCP...${NC}" | tee -a "$LOG_FILE"
+    sudo /usr/local/hestia/bin/v-uninstall --force
+    sudo rm -rf /usr/local/hestia
 
-# Verify successful uninstallation of HestiaCP
-if [ ! -d "/usr/local/hestia" ] && ! sudo systemctl status hestia &>/dev/null && ! ps aux | grep -q '[h]estia'; then
-    echo -e "${GREEN}HestiaCP uninstalled successfully.${NC}" | tee -a "$LOG_FILE"
-else
-    echo -e "${RED}Failed to uninstall HestiaCP.${NC}" | tee -a "$LOG_FILE"
-    exit 1
-fi
+    # Verify successful uninstallation of HestiaCP
+    if [ ! -d "/usr/local/hestia" ] && ! sudo systemctl status hestia &>/dev/null && ! ps aux | grep -q '[h]estia'; then
+        echo -e "${GREEN}HestiaCP uninstalled successfully.${NC}" | tee -a "$LOG_FILE"
+    else
+        echo -e "${RED}Failed to uninstall HestiaCP.${NC}" | tee -a "$LOG_FILE"
+        exit 1
+    fi
+}
 
 # طلب المدخلات
 read -p "أدخل اسم النطاق الرئيسي (مثال: jaksws.com): " DOMAIN
@@ -412,6 +418,7 @@ detect_environment
 validate_inputs
 ensure_screen_nohup_installed
 use_screen_or_nohup
+uninstall_hestia
 install_hestia
 install_odoo
 add_odoo_to_hestia_quick_app
