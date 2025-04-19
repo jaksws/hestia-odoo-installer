@@ -31,6 +31,14 @@ echo -e "${NC}"
 sudo /usr/local/hestia/bin/v-uninstall --force
 sudo rm -rf /usr/local/hestia
 
+# Verify successful uninstallation of HestiaCP
+if [ ! -d "/usr/local/hestia" ] && ! sudo systemctl status hestia &>/dev/null && ! ps aux | grep -q '[h]estia'; then
+    echo -e "${GREEN}HestiaCP uninstalled successfully.${NC}" | tee -a "$LOG_FILE"
+else
+    echo -e "${RED}Failed to uninstall HestiaCP.${NC}" | tee -a "$LOG_FILE"
+    exit 1
+fi
+
 # طلب المدخلات
 read -p "أدخل اسم النطاق الرئيسي (مثال: jaksws.com): " DOMAIN
 SERVER_IP=$(curl -s ifconfig.me)
